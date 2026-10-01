@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-nexus-dark: #070B13;
+  --color-nexus-panel: #0E1626;
+  --color-nexus-slot: #162238;
+  --color-nexus-slotHover: #1E2F4D;
+  --color-nexus-border: #1F2F4A;
+  --color-nexus-cyan: #00F0FF;
+  --color-nexus-green: #10B981;
+  --color-nexus-purple: #8B5CF6;
+  --color-nexus-amber: #F59E0B;
+  --color-nexus-crimson: #EF4444;
+  --color-nexus-shield: #38BDF8;
+}
+
+body {
+  background-color: #070B13;
+  color: #E2E8F0;
+  user-select: none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
