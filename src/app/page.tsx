@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Shield, Heart, Play, LogIn, ArrowLeft, Coins, ShoppingBag, Backpack, Lock, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Shield, Heart, Play, LogIn, ArrowLeft, Coins, ShoppingBag, Backpack, Lock, CheckCircle2, FastForward, Flag, Trophy, RotateCcw } from "lucide-react";
 
 type ScreenState = "HOME" | "LOGIN" | "INVENTORY_PREP" | "BATTLE";
 
@@ -25,11 +25,10 @@ export interface ItemData {
 
 export interface PlacedItem extends ItemData {
   instanceId: string;
-  x: number; // coluna no grid (0-indexed)
-  y: number; // linha no grid (0-indexed)
+  x: number;
+  y: number;
 }
 
-// CATÁLOGO DE ITENS DA LOJA
 const SHOP_CATALOG: ItemData[] = [
   {
     id: "espada-celestial",
@@ -93,15 +92,16 @@ const SHOP_CATALOG: ItemData[] = [
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenState>("HOME");
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
-  const [gold, setGold] = useState<number>(150); // Ouro inicial para comprar os primeiros itens
+  const [gold, setGold] = useState<number>(150);
+  const [unlockedLevel, setUnlockedLevel] = useState<number>(1);
 
-  // 1. INVENTÁRIO NORMAL (ESTOQUE) 10x6: Começa vazio
+  // Inventário Normal 10x6
   const [normalInventory, setNormalInventory] = useState<PlacedItem[]>([]);
 
-  // 2. INVENTÁRIO DO PERSONAGEM (BATALHA) 5x5: Começa vazio
+  // Mochila de Batalha 5x5 do Jogador
   const [playerBattleItems, setPlayerBattleItems] = useState<PlacedItem[]>([]);
 
-  // 3. INVENTÁRIO DO CHEFE 5x5: Começa com Armadura e Espada por padrão
+  // Mochila do Chefe 5x5 (Inicia com Armadura e Espada por padrão)
   const [bossItems] = useState<PlacedItem[]>([
     {
       ...SHOP_CATALOG[3], // Armadura Carmesim 2x2
@@ -119,20 +119,18 @@ export default function App() {
     },
   ]);
 
-  // Função para comprar da Loja -> vai direto para o Inventário Normal (10x6)
+  // Compra na Loja -> vai para o 10x6
   const buyItem = (itemData: ItemData) => {
     if (gold < itemData.price) {
-      alert("Ouro insuficiente para comprar este item!");
+      alert("Ouro insuficiente!");
       return;
     }
 
-    // Acha a primeira posição livre no grid 10x6
     let placedX = -1;
     let placedY = -1;
 
     for (let r = 0; r <= 6 - itemData.height; r++) {
       for (let c = 0; c <= 10 - itemData.width; c++) {
-        // Verifica se colide com outro item no estoque
         const hasCollision = normalInventory.some((placed) => {
           return (
             c < placed.x + placed.width &&
@@ -167,9 +165,8 @@ export default function App() {
     setNormalInventory((prev) => [...prev, newItem]);
   };
 
-  // Mover do Inventário Normal (10x6) para o Inventário de Batalha (5x5)
+  // Mover do 10x6 para o 5x5
   const equipToBattle = (item: PlacedItem) => {
-    // Procura vaga no 5x5
     let placedX = -1;
     let placedY = -1;
 
@@ -194,25 +191,24 @@ export default function App() {
     }
 
     if (placedX === -1) {
-      alert("Não há espaço livre na mochila de batalha (5x5) para equipar este item!");
+      alert("Mochila de batalha (5x5) sem espaço!");
       return;
     }
 
-    // Remove do estoque e coloca na mochila de batalha
     setNormalInventory((prev) => prev.filter((i) => i.instanceId !== item.instanceId));
-    setPlayerBattleItems((prev) => [
-      ...prev,
-      { ...item, x: placedX, y: placedY },
-    ]);
+    setPlayerBattleItems((prev) => [...prev, { ...item, x: placedX, y: placedY }]);
   };
 
-  // Mover da Mochila de Batalha (5x5) de volta para o Inventário Normal (10x6)
+  // Desequipar do 5x5 de volta para o 10x6
   const unequipToNormal = (item: PlacedItem) => {
     setPlayerBattleItems((prev) => prev.filter((i) => i.instanceId !== item.instanceId));
-    setNormalInventory((prev) => [
-      ...prev,
-      { ...item, x: 0, y: 0 },
-    ]);
+    setNormalInventory((prev) => [...prev, { ...item, x: 0, y: 0 }]);
+  };
+
+  // Vitória no combate
+  const handleVictory = () => {
+    setGold((prev) => prev + 100);
+    setUnlockedLevel((prev) => Math.max(prev, 2)); // Libera Nível 2
   };
 
   return (
@@ -221,10 +217,13 @@ export default function App() {
         <HomeScreen
           isLoggedIn={isLoggedIn}
           gold={gold}
+          unlockedLevel={unlockedLevel}
           onLoginClick={() => setCurrentScreen("LOGIN")}
           onLogoutClick={() => setIsLoggedIn(false)}
           onGoToPrep={() => setCurrentScreen("INVENTORY_PREP")}
-          onGoToBattle={() => setCurrentScreen("BATTLE")}
+          onStartLevel={(lvl) => {
+            if (lvl <= unlockedLevel) setCurrentScreen("BATTLE");
+          }}
         />
       )}
 
@@ -255,8 +254,9 @@ export default function App() {
         <BattleScreen
           playerItems={playerBattleItems}
           bossItems={bossItems}
-          onPrepClick={() => setCurrentScreen("INVENTORY_PREP")}
-          onBack={() => setCurrentScreen("HOME")}
+          onVictory={handleVictory}
+          onGiveUp={() => setCurrentScreen("INVENTORY_PREP")}
+          onBackToMenu={() => setCurrentScreen("HOME")}
         />
       )}
     </main>
@@ -264,26 +264,27 @@ export default function App() {
 }
 
 /* ========================================================
-   TELA INICIAL COM SISTEMA DE PROGRESSÃO DE NÍVEIS
+   TELA INICIAL
    ======================================================== */
 function HomeScreen({
   isLoggedIn,
   gold,
+  unlockedLevel,
   onLoginClick,
   onLogoutClick,
   onGoToPrep,
-  onGoToBattle,
+  onStartLevel,
 }: {
   isLoggedIn: boolean;
   gold: number;
+  unlockedLevel: number;
   onLoginClick: () => void;
   onLogoutClick: () => void;
   onGoToPrep: () => void;
-  onGoToBattle: () => void;
+  onStartLevel: (lvl: number) => void;
 }) {
   return (
     <div className="relative min-h-screen flex flex-col justify-between p-6 bg-gradient-to-b from-[#2a4d69] via-[#1a2f44] to-[#0c1622]">
-      {/* Topo: Logo e Auth / Status */}
       <header className="flex justify-between items-center w-full max-w-6xl mx-auto">
         <span className="font-extrabold tracking-widest text-lg text-slate-100">
           AERIA <span className="text-cyan-400">NEXUS</span>
@@ -294,11 +295,8 @@ function HomeScreen({
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-300 font-bold text-sm shadow">
               <Coins size={16} /> {gold} Ouro
             </div>
-            <button
-              onClick={onLogoutClick}
-              className="text-xs text-slate-400 hover:text-white underline"
-            >
-              Desconectar
+            <button onClick={onLogoutClick} className="text-xs text-slate-400 hover:text-white underline">
+              Sair
             </button>
           </div>
         ) : (
@@ -311,31 +309,29 @@ function HomeScreen({
         )}
       </header>
 
-      {/* Conteúdo Central */}
       <section className="flex flex-col items-center text-center my-auto px-4 max-w-4xl mx-auto w-full">
         <h1 className="text-5xl md:text-7xl font-black text-white mb-4 drop-shadow-lg">
           AERIA <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">NEXUS</span>
         </h1>
         <p className="max-w-md text-slate-300 text-sm md:text-base mb-6">
-          Monte sua mochila tática a partir do seu estoque e enfrente os Guardiões do Nexus.
+          Selecione uma fase para entrar direto na batalha automática.
         </p>
 
         {isLoggedIn ? (
           <div className="w-full flex flex-col items-center gap-6">
-            {/* PAINEL DE NÍVEIS / PROGRESSÃO */}
             <div className="w-full bg-[#121c2b]/90 border border-slate-700/80 rounded-2xl p-5 shadow-2xl backdrop-blur-md">
               <h3 className="text-xs font-black tracking-widest text-cyan-300 uppercase mb-4 text-left">
-                SELEÇÃO DE NÍVEIS (FASE ATUAL)
+                SELEÇÃO DE FASES (CLIQUE PARA LUTAR)
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* NÍVEL 1: Guardião Oni (Desbloqueado) */}
+                {/* NÍVEL 1: Desbloqueado */}
                 <div
-                  onClick={onGoToBattle}
-                  className="cursor-pointer group relative bg-gradient-to-b from-[#2d121c] to-[#180a11] border-2 border-red-500/80 hover:border-red-400 rounded-xl p-4 flex flex-col items-center justify-between shadow-lg transition-all hover:scale-105"
+                  onClick={() => onStartLevel(1)}
+                  className="cursor-pointer group relative bg-gradient-to-b from-[#2d121c] to-[#180a11] border-2 border-red-500 hover:border-red-400 rounded-xl p-4 flex flex-col items-center justify-between shadow-lg transition-all hover:scale-105"
                 >
                   <span className="text-[10px] font-bold text-red-300 bg-red-950/80 px-2 py-0.5 rounded-full border border-red-500/40">
-                    NÍVEL 1 (DISPONÍVEL)
+                    NÍVEL 1
                   </span>
                   <img
                     src="/chefe.png"
@@ -345,24 +341,37 @@ function HomeScreen({
                   <span className="text-xs font-black text-white tracking-wide">
                     Guardião Oni (Ignis-Vex)
                   </span>
-                  <span className="text-[10px] text-emerald-400 font-bold mt-1 flex items-center gap-1">
-                    <CheckCircle2 size={12} /> Desbloqueado
+                  <span className="text-[11px] text-emerald-400 font-bold mt-2 flex items-center gap-1">
+                    <Play size={12} fill="#34d399" /> Iniciar Combate
                   </span>
                 </div>
 
-                {/* NÍVEL 2: Rainha da Colmeia (Bloqueado) */}
-                <div className="opacity-60 relative bg-[#131b26] border border-slate-700 rounded-xl p-4 flex flex-col items-center justify-between shadow">
+                {/* NÍVEL 2 */}
+                <div
+                  onClick={() => unlockedLevel >= 2 && onStartLevel(2)}
+                  className={`relative rounded-xl p-4 flex flex-col items-center justify-between shadow transition-all ${
+                    unlockedLevel >= 2
+                      ? "cursor-pointer bg-gradient-to-b from-[#221035] to-[#12081d] border-2 border-purple-500 hover:scale-105"
+                      : "opacity-60 bg-[#131b26] border border-slate-700 cursor-not-allowed"
+                  }`}
+                >
                   <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
                     NÍVEL 2
                   </span>
                   <div className="h-28 flex items-center justify-center text-slate-500">
-                    <Lock size={36} />
+                    {unlockedLevel >= 2 ? (
+                      <CheckCircle2 size={40} className="text-purple-400" />
+                    ) : (
+                      <Lock size={36} />
+                    )}
                   </div>
-                  <span className="text-xs font-bold text-slate-400">Rainha da Colmeia</span>
-                  <span className="text-[10px] text-slate-500 mt-1">Vença o Nível 1 para liberar</span>
+                  <span className="text-xs font-bold text-slate-300">Rainha da Colmeia</span>
+                  <span className="text-[10px] text-slate-500 mt-1">
+                    {unlockedLevel >= 2 ? "Desbloqueado!" : "Vença o Nível 1"}
+                  </span>
                 </div>
 
-                {/* NÍVEL 3: Arquilorde de Éter (Bloqueado) */}
+                {/* NÍVEL 3 */}
                 <div className="opacity-60 relative bg-[#131b26] border border-slate-700 rounded-xl p-4 flex flex-col items-center justify-between shadow">
                   <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
                     NÍVEL 3
@@ -371,29 +380,18 @@ function HomeScreen({
                     <Lock size={36} />
                   </div>
                   <span className="text-xs font-bold text-slate-400">Arquilorde de Éter</span>
-                  <span className="text-[10px] text-slate-500 mt-1">Vença o Nível 2 para liberar</span>
+                  <span className="text-[10px] text-slate-500 mt-1">Vença o Nível 2</span>
                 </div>
               </div>
             </div>
 
-            {/* BOTÕES PRINCIPAIS DE NAVEGAÇÃO */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 w-full max-w-md">
-              <button
-                onClick={onGoToPrep}
-                className="flex-1 w-full py-4 px-6 rounded-xl font-bold text-sm bg-gradient-to-r from-cyan-600 to-blue-700 hover:brightness-110 text-white shadow-lg transition-all flex items-center justify-center gap-2"
-              >
-                <Backpack size={18} />
-                INVENTÁRIO & LOJA
-              </button>
-
-              <button
-                onClick={onGoToBattle}
-                className="flex-1 w-full py-4 px-6 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-500 to-[#16a34a] hover:brightness-110 text-slate-950 shadow-lg transition-all flex items-center justify-center gap-2"
-              >
-                <Play fill="#020617" size={18} />
-                BATALHA (NÍVEL 1)
-              </button>
-            </div>
+            <button
+              onClick={onGoToPrep}
+              className="py-3.5 px-8 rounded-xl font-bold text-sm bg-gradient-to-r from-cyan-600 to-blue-700 hover:brightness-110 text-white shadow-lg transition-all flex items-center gap-2"
+            >
+              <Backpack size={18} />
+              ORGANIZAR MOCHILA & LOJA
+            </button>
           </div>
         ) : (
           <button
@@ -418,10 +416,7 @@ function HomeScreen({
 function LoginScreen({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
   return (
     <div className="min-h-screen flex flex-col justify-center items-center p-6 bg-[#0c1622] relative">
-      <button
-        onClick={onBack}
-        className="absolute top-6 left-6 flex items-center gap-2 text-slate-400 hover:text-white"
-      >
+      <button onClick={onBack} className="absolute top-6 left-6 flex items-center gap-2 text-slate-400 hover:text-white">
         <ArrowLeft size={18} /> Voltar
       </button>
 
@@ -451,7 +446,7 @@ function LoginScreen({ onSuccess, onBack }: { onSuccess: () => void; onBack: () 
 }
 
 /* ========================================================
-   TELA DE INVENTÁRIO (ESTOQUE 10x6 + MOCHILA 5x5 + LOJA)
+   TELA DE PREPARAÇÃO (10x6 + 5x5 + LOJA)
    ======================================================== */
 function InventoryPrepScreen({
   gold,
@@ -476,12 +471,8 @@ function InventoryPrepScreen({
 
   return (
     <div className="min-h-screen flex flex-col justify-between p-4 md:p-6 bg-[#0a0f18] text-slate-100">
-      {/* Topo com Ouro e Botão Voltar */}
       <header className="max-w-7xl w-full mx-auto flex justify-between items-center pb-4 border-b border-slate-800">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-semibold"
-        >
+        <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-semibold">
           <ArrowLeft size={18} /> Voltar ao Menu
         </button>
 
@@ -499,7 +490,6 @@ function InventoryPrepScreen({
         </div>
       </header>
 
-      {/* Abas: Alternar entre Organização e Loja */}
       <div className="max-w-7xl w-full mx-auto flex gap-4 mt-4">
         <button
           onClick={() => setActiveTab("INVENTORY")}
@@ -524,16 +514,14 @@ function InventoryPrepScreen({
         </button>
       </div>
 
-      {/* CONTEÚDO DA ABA SELECIONADA */}
       <div className="max-w-7xl w-full mx-auto my-auto py-4">
         {activeTab === "SHOP" ? (
-          /* ================= SEÇÃO DA LOJA ================= */
           <div className="bg-[#101724] border border-slate-800 rounded-2xl p-6 shadow-2xl">
             <h2 className="text-base font-black text-amber-400 tracking-wider uppercase mb-1">
               LOJA DE PEÇAS & ARMAS
             </h2>
             <p className="text-xs text-slate-400 mb-6">
-              Compre peças para enviar ao seu inventário normal (10x6).
+              Compre peças para enviar ao seu estoque normal (10x6).
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -545,13 +533,8 @@ function InventoryPrepScreen({
                   <span className="text-xs font-black text-white">{item.name}</span>
                   <span className="text-[10px] text-slate-400">{item.type} ({item.width}x{item.height})</span>
 
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="h-28 object-contain my-3 drop-shadow"
-                  />
+                  <img src={item.imageUrl} alt={item.name} className="h-28 object-contain my-3 drop-shadow" />
 
-                  {/* Benefícios */}
                   <div className="text-[11px] font-bold text-slate-300 mb-4">
                     {item.stats.damage && <div className="text-red-400">+{item.stats.damage} Dano</div>}
                     {item.stats.armor && <div className="text-sky-400">+{item.stats.armor} Armadura</div>}
@@ -577,149 +560,217 @@ function InventoryPrepScreen({
             </div>
           </div>
         ) : (
-          /* ================= SEÇÃO DE MONTAGEM (10x6 E 5x5) ================= */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
-            {/* 1. INVENTÁRIO NORMAL (ESTOQUE 10x6) */}
+            {/* 10x6 Normal */}
             <div className="lg:col-span-7 flex flex-col gap-2">
               <div className="flex justify-between items-center px-1">
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                    INVENTÁRIO NORMAL (ESTOQUE)
+                    INVENTÁRIO NORMAL (ESTOQUE 10x6)
                   </h3>
-                  <span className="text-xs text-slate-400">Grade 10x6 — Clique no item para equipar no 5x5</span>
+                  <span className="text-xs text-slate-400">Clique para equipar na mochila 5x5</span>
                 </div>
                 <span className="text-xs font-bold text-cyan-400 bg-cyan-950/60 px-2.5 py-1 rounded-full border border-cyan-800">
-                  {normalInventory.length} Peças Armazenadas
+                  {normalInventory.length} Peças
                 </span>
               </div>
 
-              {/* Grid 10x6 */}
               <div className="w-full aspect-[10/6] bg-[#0c121d] border-4 border-[#1b2636] rounded-2xl p-2.5 shadow-2xl relative">
-                {/* 60 slots de fundo */}
                 <div className="absolute inset-2.5 grid grid-cols-10 grid-rows-6 gap-1 pointer-events-none">
                   {Array.from({ length: 60 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg border border-slate-700/20 bg-slate-800/10"
-                    />
+                    <div key={i} className="rounded-lg border border-slate-700/20 bg-slate-800/10" />
                   ))}
                 </div>
 
-                {/* Itens do Estoque 10x6 */}
                 <div className="relative z-10 w-full h-full grid grid-cols-10 grid-rows-6 gap-1">
                   {normalInventory.map((item) => (
                     <div
                       key={item.instanceId}
                       onClick={() => onEquipItem(item)}
-                      title="Clique para equipar na mochila de batalha"
                       style={{
                         gridColumn: `${item.x + 1} / span ${item.width}`,
                         gridRow: `${item.y + 1} / span ${item.height}`,
                       }}
                       className={`group rounded-lg border-2 ${item.borderColor} ${item.bgColor} p-1 flex items-center justify-center shadow-lg relative cursor-pointer hover:scale-[1.02] transition-all`}
                     >
-                      <img
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="w-full h-full object-contain pointer-events-none drop-shadow"
-                      />
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain pointer-events-none drop-shadow" />
                     </div>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* 2. MOCHILA DE BATALHA DO PERSONAGEM (5x5) */}
+            {/* 5x5 Batalha */}
             <div className="lg:col-span-5 flex flex-col gap-2">
               <div className="flex justify-between items-center px-1">
                 <div>
                   <h3 className="text-sm font-black text-cyan-300 uppercase tracking-wider">
                     MOCHILA DE BATALHA (5x5)
                   </h3>
-                  <span className="text-xs text-slate-400">Itens que vão para o combate (Clique para desequipar)</span>
+                  <span className="text-xs text-slate-400">Clique no item para guardar</span>
                 </div>
                 <span className="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-800">
                   {playerBattleItems.length} Equipados
                 </span>
               </div>
 
-              {/* Grid 5x5 */}
               <div className="w-full aspect-square bg-[#0e1624] border-4 border-[#1e2a3c] rounded-2xl p-2.5 shadow-2xl relative">
-                {/* 25 slots de fundo */}
                 <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
                   {Array.from({ length: 25 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-cyan-400/15 bg-cyan-950/20"
-                    />
+                    <div key={i} className="rounded-xl border border-cyan-400/15 bg-cyan-950/20" />
                   ))}
                 </div>
 
-                {/* Itens Equipados */}
                 <div className="relative z-10 w-full h-full grid grid-cols-5 grid-rows-5 gap-1.5">
                   {playerBattleItems.map((item) => (
                     <div
                       key={item.instanceId}
                       onClick={() => onUnequipItem(item)}
-                      title="Clique para guardar no estoque normal"
                       style={{
                         gridColumn: `${item.x + 1} / span ${item.width}`,
                         gridRow: `${item.y + 1} / span ${item.height}`,
                       }}
                       className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-1.5 flex items-center justify-center shadow-lg relative cursor-pointer hover:brightness-110 transition-all`}
                     >
-                      {/* Grade interna do item */}
-                      {item.width > 1 || item.height > 1 ? (
-                        <div
-                          className="absolute inset-1 grid gap-1 pointer-events-none opacity-25"
-                          style={{
-                            gridTemplateColumns: `repeat(${item.width}, minmax(0, 1fr))`,
-                            gridTemplateRows: `repeat(${item.height}, minmax(0, 1fr))`,
-                          }}
-                        >
-                          {Array.from({ length: item.width * item.height }).map((_, idx) => (
-                            <div key={idx} className="border border-cyan-300 rounded" />
-                          ))}
-                        </div>
-                      ) : null}
-
-                      <img
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="w-full h-full object-contain pointer-events-none drop-shadow relative z-10"
-                      />
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain pointer-events-none drop-shadow relative z-10" />
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-
           </div>
         )}
       </div>
 
       <footer className="text-center text-xs text-slate-500 py-2 border-t border-slate-800">
-        Gerencie suas peças com cuidado. Itens adjacentes ativarão sinergias no combate.
+        Aeria Nexus — Fase de Preparação
       </footer>
     </div>
   );
 }
 
 /* ========================================================
-   TELA DA ARENA (COM CARREGAMENTO DINÂMICO DOS ITENS)
+   TELA DA ARENA COM COMBATE AUTOMÁTICO, 2X E DESISTIR
    ======================================================== */
 function BattleScreen({
   playerItems,
   bossItems,
-  onPrepClick,
-  onBack,
+  onVictory,
+  onGiveUp,
+  onBackToMenu,
 }: {
   playerItems: PlacedItem[];
   bossItems: PlacedItem[];
-  onPrepClick: () => void;
-  onBack: () => void;
+  onVictory: () => void;
+  onGiveUp: () => void;
+  onBackToMenu: () => void;
 }) {
+  // Atributos derivados dos itens equipados
+  const extraHealth = playerItems.reduce((acc, item) => acc + (item.stats.health || 0), 0);
+  const extraArmor = playerItems.reduce((acc, item) => acc + (item.stats.armor || 0), 0);
+  const playerDamage = playerItems.reduce((acc, item) => acc + (item.stats.damage || 0), 0) || 5; // Dano mínimo 5 caso não tenha arma
+
+  const maxPlayerHp = 300 + extraHealth;
+  const maxPlayerShield = 80 + extraArmor;
+  const maxBossHp = 600;
+  const maxBossShield = 350; // 200 base + 150 armadura
+
+  const [playerHp, setPlayerHp] = useState<number>(maxPlayerHp);
+  const [playerShield, setPlayerShield] = useState<number>(maxPlayerShield);
+  const [bossHp, setBossHp] = useState<number>(maxBossHp);
+  const [bossShield, setBossShield] = useState<number>(maxBossShield);
+
+  const [speedMultiplier, setSpeedMultiplier] = useState<1 | 2>(1);
+  const [combatStatus, setCombatStatus] = useState<"FIGHTING" | "VICTORY" | "DEFEAT">("FIGHTING");
+  const [floatingDamage, setFloatingDamage] = useState<{ text: string; color: string } | null>(null);
+  const [bossFrozen, setBossFrozen] = useState<boolean>(false);
+
+  // LOOP DE COMBATE AUTOMÁTICO
+  useEffect(() => {
+    if (combatStatus !== "FIGHTING") return;
+
+    const intervalTime = speedMultiplier === 1 ? 1200 : 600;
+
+    const timer = setInterval(() => {
+      // 1. TURNO DO JOGADOR: Ataca o Chefe
+      const willFreeze = Math.random() < 0.25; // 25% de chance de congelar
+      if (willFreeze) setBossFrozen(true);
+
+      setBossShield((prevShield) => {
+        let remainingDmg = playerDamage;
+        let newShield = prevShield;
+
+        if (prevShield > 0) {
+          if (prevShield >= remainingDmg) {
+            newShield = prevShield - remainingDmg;
+            remainingDmg = 0;
+          } else {
+            remainingDmg -= prevShield;
+            newShield = 0;
+          }
+        }
+
+        if (remainingDmg > 0) {
+          setBossHp((prevHp) => {
+            const finalHp = Math.max(0, prevHp - remainingDmg);
+            if (finalHp === 0) {
+              setCombatStatus("VICTORY");
+              onVictory();
+            }
+            return finalHp;
+          });
+        }
+
+        return newShield;
+      });
+
+      setFloatingDamage({
+        text: willFreeze ? `-${playerDamage} (❄️ CONGELADO!)` : `-${playerDamage} Dano`,
+        color: willFreeze ? "text-cyan-300" : "text-red-500",
+      });
+
+      // 2. TURNO DO CHEFE: Ataca o Jogador (se não estiver congelado)
+      setTimeout(() => {
+        if (bossFrozen) {
+          setBossFrozen(false);
+          setFloatingDamage({ text: "Chefe Descongelou!", color: "text-slate-300" });
+          return;
+        }
+
+        const bossAtk = 25;
+        setPlayerShield((prevShield) => {
+          let remDmg = bossAtk;
+          let newS = prevShield;
+
+          if (prevShield > 0) {
+            if (prevShield >= remDmg) {
+              newS = prevShield - remDmg;
+              remDmg = 0;
+            } else {
+              remDmg -= prevShield;
+              newS = 0;
+            }
+          }
+
+          if (remDmg > 0) {
+            setPlayerHp((prevHp) => {
+              const finalHp = Math.max(0, prevHp - remDmg);
+              if (finalHp === 0) {
+                setCombatStatus("DEFEAT");
+              }
+              return finalHp;
+            });
+          }
+
+          return newS;
+        });
+      }, intervalTime / 2);
+
+    }, intervalTime);
+
+    return () => clearInterval(timer);
+  }, [combatStatus, speedMultiplier, playerDamage, bossFrozen]);
+
   return (
     <div
       className="relative min-h-screen flex flex-col justify-between p-4 md:p-6 overflow-hidden bg-cover bg-center"
@@ -729,51 +780,63 @@ function BattleScreen({
     >
       {/* 1. HUD SUPERIOR */}
       <header className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 items-center gap-4 relative z-10">
+        {/* Jogador */}
         <div className="w-full max-w-[420px] flex flex-col gap-1.5">
-          <div className="flex justify-between text-sm font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+          <div className="flex justify-between text-sm font-bold text-white drop-shadow">
             <span>JOGADOR 1 (Você)</span>
-            <span className="text-xs">245 / 300</span>
+            <span className="text-xs">{playerHp} / {maxPlayerHp}</span>
           </div>
           <div className="h-6 w-full bg-[#171c26]/90 border-2 border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Heart size={14} className="text-red-500 fill-red-500 absolute left-1.5 z-10" />
-            <div className="h-full bg-red-600 w-[81%]" />
+            <div
+              className="h-full bg-red-600 transition-all duration-300"
+              style={{ width: `${(playerHp / maxPlayerHp) * 100}%` }}
+            />
           </div>
           <div className="h-4 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1.5 z-10" />
-            <div className="h-full bg-sky-500 w-[80%]" />
+            <div
+              className="h-full bg-sky-500 transition-all duration-300"
+              style={{ width: `${(playerShield / maxPlayerShield) * 100}%` }}
+            />
           </div>
         </div>
 
+        {/* Round central */}
         <div className="flex flex-col items-center">
           <div className="w-14 h-14 rounded-full bg-[#271f1a] border-2 border-[#544337] flex flex-col items-center justify-center shadow-2xl">
             <span className="text-[9px] font-black text-amber-400 uppercase">ROUND</span>
-            <span className="text-xl font-black text-white leading-none">5</span>
+            <span className="text-xl font-black text-white leading-none">1</span>
           </div>
-          <button
-            onClick={onBack}
-            className="text-[11px] text-slate-900 bg-white/80 hover:bg-white px-2 py-0.5 rounded font-bold mt-1 shadow"
-          >
-            Menu
-          </button>
+          <span className="text-[10px] text-emerald-300 font-bold mt-1 bg-black/60 px-2 py-0.5 rounded animate-pulse">
+            EM COMBATE AUTOMÁTICO
+          </span>
         </div>
 
+        {/* Chefe */}
         <div className="w-full max-w-[420px] md:ml-auto flex flex-col gap-1.5">
-          <div className="flex justify-between text-sm font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-            <span>CHEFE (Guardião)</span>
-            <span className="text-xs">512 / 600</span>
+          <div className="flex justify-between text-sm font-bold text-white drop-shadow">
+            <span>CHEFE (Guardião Oni)</span>
+            <span className="text-xs">{bossHp} / {maxBossHp}</span>
           </div>
           <div className="h-6 w-full bg-[#171c26]/90 border-2 border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Heart size={14} className="text-red-500 fill-red-500 absolute left-1.5 z-10" />
-            <div className="h-full bg-red-600 w-[85%] ml-auto" />
+            <div
+              className="h-full bg-red-600 transition-all duration-300 ml-auto"
+              style={{ width: `${(bossHp / maxBossHp) * 100}%` }}
+            />
           </div>
           <div className="h-4 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1.5 z-10" />
-            <div className="h-full bg-sky-500 w-[75%] ml-auto" />
+            <div
+              className="h-full bg-sky-500 transition-all duration-300 ml-auto"
+              style={{ width: `${(bossShield / maxBossShield) * 100}%` }}
+            />
           </div>
         </div>
       </header>
 
-      {/* 2. PERSONAGENS */}
+      {/* 2. PERSONAGENS & NÚMEROS DE DANO FLUTUANTES */}
       <section className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 items-end my-1 h-52 md:h-64 pointer-events-none relative z-10">
         <div className="w-full max-w-[420px] flex justify-center">
           <img
@@ -783,31 +846,32 @@ function BattleScreen({
           />
         </div>
 
-        <div className="flex flex-col items-center justify-center pb-8 font-mono font-black text-center drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-          <span className="text-xl text-red-500">-21 Dano</span>
-          <span className="text-sm text-sky-300">-50 Escudo</span>
+        <div className="flex flex-col items-center justify-center pb-8 font-mono font-black text-center drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] min-h-[60px]">
+          {floatingDamage && (
+            <span className={`text-xl md:text-2xl font-black ${floatingDamage.color} animate-bounce`}>
+              {floatingDamage.text}
+            </span>
+          )}
         </div>
 
         <div className="w-full max-w-[420px] md:ml-auto flex justify-center">
           <img
             src="/chefe.png"
             alt="Chefe"
-            className="h-48 md:h-60 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)]"
+            className={`h-48 md:h-60 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)] transition-all ${
+              bossFrozen ? "brightness-125 hue-rotate-180 drop-shadow-[0_0_20px_#22d3ee]" : ""
+            }`}
           />
         </div>
       </section>
 
-      {/* 3. INVENTÁRIOS 5x5 */}
+      {/* 3. PAINÉIS DE INVENTÁRIO 5x5 */}
       <section className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 items-start relative z-10">
-        
-        {/* ================= INVENTÁRIO DO JOGADOR (MONTAGEM DO DECK) ================= */}
+        {/* Jogador */}
         <div className="w-full max-w-[420px] aspect-square bg-[#0e1624]/90 backdrop-blur-sm border-4 border-[#1e2a3c] rounded-2xl p-2.5 shadow-2xl relative">
           <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
             {Array.from({ length: 25 }).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-xl border border-cyan-400/15 bg-cyan-950/20"
-              />
+              <div key={i} className="rounded-xl border border-cyan-400/15 bg-cyan-950/20" />
             ))}
           </div>
 
@@ -819,71 +883,19 @@ function BattleScreen({
                   gridColumn: `${item.x + 1} / span ${item.width}`,
                   gridRow: `${item.y + 1} / span ${item.height}`,
                 }}
-                className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-2 flex items-center justify-center shadow-lg relative cursor-pointer hover:brightness-110 transition-all`}
+                className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-2 flex items-center justify-center shadow-lg relative overflow-hidden`}
               >
-                {item.width > 1 || item.height > 1 ? (
-                  <div
-                    className="absolute inset-1 grid gap-1.5 pointer-events-none opacity-25"
-                    style={{
-                      gridTemplateColumns: `repeat(${item.width}, minmax(0, 1fr))`,
-                      gridTemplateRows: `repeat(${item.height}, minmax(0, 1fr))`,
-                    }}
-                  >
-                    {Array.from({ length: item.width * item.height }).map((_, idx) => (
-                      <div key={idx} className="border border-cyan-300 rounded-lg" />
-                    ))}
-                  </div>
-                ) : null}
-
-                <img
-                  src={item.imageUrl}
-                  alt={item.name}
-                  className="w-full h-full object-contain drop-shadow-md select-none pointer-events-none relative z-10"
-                />
-
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-[#0a111c]/95 backdrop-blur-md border border-cyan-500/60 rounded-xl p-3 shadow-[0_10px_30px_rgba(0,0,0,0.9)] opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50 flex flex-col gap-1.5 text-left">
-                  <div className="flex justify-between items-start border-b border-slate-700/60 pb-1.5">
-                    <div>
-                      <h4 className="text-xs font-black text-white tracking-wide">{item.name}</h4>
-                      <span className="text-[10px] font-semibold text-cyan-300">{item.type}</span>
-                    </div>
-                    <span className="text-[9px] font-bold text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700">
-                      {item.width}x{item.height}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-1 py-0.5">
-                    {item.stats.damage && (
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-red-400">
-                        <span>⚔️</span> +{item.stats.damage} de Dano
-                      </div>
-                    )}
-                    {item.stats.armor && (
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
-                        <Shield size={13} className="text-sky-400 fill-sky-400/20" /> +{item.stats.armor} de Armadura
-                      </div>
-                    )}
-                    {item.stats.specialEffect && (
-                      <div className="mt-1 pt-1.5 border-t border-slate-800/80 flex items-start gap-1.5 text-[11px] font-medium text-cyan-200 leading-tight">
-                        <span>❄️</span> {item.stats.specialEffect}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain pointer-events-none drop-shadow" />
               </div>
             ))}
           </div>
         </div>
 
-        {/* ================= INVENTÁRIO DO CHEFE (PADRÃO COM ARMADURA E ESPADA) ================= */}
+        {/* Chefe */}
         <div className="w-full max-w-[420px] md:ml-auto aspect-square bg-[#160c1a]/90 backdrop-blur-sm border-4 border-[#2c1533] rounded-2xl p-2.5 shadow-2xl relative">
           <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
             {Array.from({ length: 25 }).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-xl border border-purple-400/15 bg-purple-950/20"
-              />
+              <div key={i} className="rounded-xl border border-purple-400/15 bg-purple-950/20" />
             ))}
           </div>
 
@@ -895,72 +907,77 @@ function BattleScreen({
                   gridColumn: `${item.x + 1} / span ${item.width}`,
                   gridRow: `${item.y + 1} / span ${item.height}`,
                 }}
-                className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-2 flex items-center justify-center shadow-lg relative cursor-pointer hover:brightness-110 transition-all`}
+                className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-2 flex items-center justify-center shadow-lg relative overflow-hidden`}
               >
-                {item.width > 1 || item.height > 1 ? (
-                  <div
-                    className="absolute inset-1 grid gap-1.5 pointer-events-none opacity-25"
-                    style={{
-                      gridTemplateColumns: `repeat(${item.width}, minmax(0, 1fr))`,
-                      gridTemplateRows: `repeat(${item.height}, minmax(0, 1fr))`,
-                    }}
-                  >
-                    {Array.from({ length: item.width * item.height }).map((_, idx) => (
-                      <div key={idx} className="border border-purple-300 rounded-lg" />
-                    ))}
-                  </div>
-                ) : null}
-
-                <img
-                  src={item.imageUrl}
-                  alt={item.name}
-                  className="w-full h-full object-contain drop-shadow-md select-none pointer-events-none relative z-10"
-                />
-
-                {/* Tooltip do Chefe */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-[#140a17]/95 backdrop-blur-md border border-purple-500/60 rounded-xl p-3 shadow-[0_10px_30px_rgba(0,0,0,0.9)] opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50 flex flex-col gap-1.5 text-left">
-                  <div className="flex justify-between items-start border-b border-slate-700/60 pb-1.5">
-                    <div>
-                      <h4 className="text-xs font-black text-white tracking-wide">{item.name}</h4>
-                      <span className="text-[10px] font-semibold text-purple-300">{item.type}</span>
-                    </div>
-                    <span className="text-[9px] font-bold text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700">
-                      {item.width}x{item.height}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-1 py-0.5">
-                    {item.stats.damage && (
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-red-400">
-                        <span>⚔️</span> +{item.stats.damage} de Dano
-                      </div>
-                    )}
-                    {item.stats.armor && (
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
-                        <Shield size={13} className="text-sky-400 fill-sky-400/20" /> +{item.stats.armor} de Armadura
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain pointer-events-none drop-shadow" />
               </div>
             ))}
           </div>
         </div>
-
       </section>
 
-      {/* 4. BOTÕES DE AÇÃO */}
+      {/* 4. BOTÕES: AUMENTAR TEMPO (2X) E DESISTIR */}
       <footer className="max-w-md w-full mx-auto flex items-center gap-4 mt-3 pb-2 relative z-10">
         <button
-          onClick={onPrepClick}
-          className="flex-1 py-3 rounded-xl bg-[#243142]/90 hover:bg-[#2c3d52] border-2 border-[#3d5069] text-white font-bold text-sm tracking-wider uppercase shadow backdrop-blur-sm"
+          onClick={() => setSpeedMultiplier((prev) => (prev === 1 ? 2 : 1))}
+          className={`flex-1 py-3 rounded-xl border-2 font-black text-sm tracking-wider uppercase shadow flex items-center justify-center gap-2 transition-all ${
+            speedMultiplier === 2
+              ? "bg-amber-500 border-amber-300 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+              : "bg-[#243142]/90 hover:bg-[#2c3d52] border-[#3d5069] text-white"
+          }`}
         >
-          PREPARAÇÃO / LOJA
+          <FastForward size={18} />
+          {speedMultiplier === 2 ? "VELOCIDADE: 2X" : "VELOCIDADE: 1X"}
         </button>
-        <button className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 border-2 border-emerald-300 text-slate-950 font-black text-sm tracking-wider uppercase shadow-lg">
-          LUTAR
+
+        <button
+          onClick={onGiveUp}
+          className="flex-1 py-3 rounded-xl bg-red-950/80 hover:bg-red-900 border-2 border-red-600/80 text-red-200 font-black text-sm tracking-wider uppercase shadow flex items-center justify-center gap-2 transition-all"
+        >
+          <Flag size={18} />
+          DESISTIR
         </button>
       </footer>
+
+      {/* MODAL DE RESULTADO: VITÓRIA OU DERROTA */}
+      {combatStatus !== "FIGHTING" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="max-w-md w-full bg-[#131c2b] border-2 border-slate-700 rounded-2xl p-6 text-center shadow-2xl flex flex-col items-center">
+            {combatStatus === "VICTORY" ? (
+              <>
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 mb-3 shadow-[0_0_20px_rgba(52,211,153,0.4)]">
+                  <Trophy size={32} />
+                </div>
+                <h2 className="text-2xl font-black text-white mb-1">VITÓRIA NO NEXUS!</h2>
+                <p className="text-sm text-slate-300 mb-4">Você derrotou o Guardião Oni e avançou de nível!</p>
+                <div className="bg-amber-950/60 border border-amber-500/50 rounded-xl px-4 py-2 text-amber-300 font-black text-sm mb-6 flex items-center gap-2">
+                  <Coins size={18} /> +100 Ouro Obtido!
+                </div>
+                <button
+                  onClick={onBackToMenu}
+                  className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm uppercase shadow-lg transition-all"
+                >
+                  CONTINUAR NO MENU
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 rounded-full bg-red-500/20 border-2 border-red-500 flex items-center justify-center text-red-400 mb-3 shadow-[0_0_20px_rgba(239,68,68,0.4)]">
+                  <RotateCcw size={32} />
+                </div>
+                <h2 className="text-2xl font-black text-white mb-1">DERROTA</h2>
+                <p className="text-sm text-slate-300 mb-6">Sua mochila precisa de mais equipamentos para resistir.</p>
+                <button
+                  onClick={onGiveUp}
+                  className="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-sm uppercase shadow-lg transition-all"
+                >
+                  VOLTAR PARA A LOJA & MOCHILA
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
