@@ -1,9 +1,31 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Shield, Heart, Play, LogIn, ArrowLeft, Coins, ShoppingBag, Backpack, Lock, CheckCircle2, FastForward, Flag, Trophy, RotateCcw, DollarSign, X } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Shield,
+  Heart,
+  Play,
+  LogIn,
+  ArrowLeft,
+  Coins,
+  ShoppingBag,
+  Backpack,
+  Lock,
+  CheckCircle2,
+  FastForward,
+  Flag,
+  Trophy,
+  RotateCcw,
+  DollarSign,
+  X,
+  Compass,
+  Gift,
+  Sparkles,
+  MapPin,
+} from "lucide-react";
+import { PlasmaProjectile } from "./components/PlasmaProjectile";
 
-type ScreenState = "HOME" | "LOGIN" | "INVENTORY_PREP" | "BATTLE";
+type ScreenState = "HOME" | "LOGIN" | "MAP" | "INVENTORY_PREP" | "BATTLE";
 
 export interface ItemData {
   id: string;
@@ -15,8 +37,8 @@ export interface ItemData {
   borderColor: string;
   bgColor: string;
   price: number;
-  sellPrice: number;   // Valor recebido ao vender
-  cooldown?: number;    // Tempo em segundos para carregar o golpe
+  sellPrice: number;
+  cooldown?: number;
   stats: {
     damage?: number;
     armor?: number;
@@ -40,13 +62,13 @@ const SHOP_CATALOG: ItemData[] = [
     height: 2,
     price: 60,
     sellPrice: 42,
-    cooldown: 3.5, // 3.5 segundos de recarga
+    cooldown: 3.0,
     imageUrl: "/espada.png",
     borderColor: "border-[#38bdf8]",
     bgColor: "bg-[#14293e]/90",
     stats: {
-      damage: 15,
-      specialEffect: "Chance de congelar o carregamento do inimigo",
+      damage: 25,
+      specialEffect: "40% de chance de congelar o chefe por 2s",
     },
   },
   {
@@ -61,7 +83,7 @@ const SHOP_CATALOG: ItemData[] = [
     borderColor: "border-[#22c55e]",
     bgColor: "bg-[#0f2e1a]/90",
     stats: {
-      armor: 15,
+      armor: 50,
     },
   },
   {
@@ -91,7 +113,7 @@ const SHOP_CATALOG: ItemData[] = [
     borderColor: "border-[#ef4444]",
     bgColor: "bg-[#331416]/90",
     stats: {
-      armor: 150,
+      armor: 120,
     },
   },
 ];
@@ -100,26 +122,23 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenState>("HOME");
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
   const [gold, setGold] = useState<number>(150);
-  const [unlockedLevel, setUnlockedLevel] = useState<number>(1);
+  const [unlockedProgress, setUnlockedProgress] = useState<number>(1);
 
-  // Inventário Normal 10x6 (Estoque)
+  const [collectedRelics, setCollectedRelics] = useState<string[]>([]);
   const [normalInventory, setNormalInventory] = useState<PlacedItem[]>([]);
-
-  // Mochila de Batalha 5x5 do Jogador
   const [playerBattleItems, setPlayerBattleItems] = useState<PlacedItem[]>([]);
 
-  // Mochila do Chefe 5x5 (Inicia com Armadura 2x2 e Espada 2x2)
   const [bossItems] = useState<PlacedItem[]>([
     {
-      ...SHOP_CATALOG[3], // Armadura Carmesim
+      ...SHOP_CATALOG[3],
       instanceId: "boss-armor",
       x: 1,
       y: 1,
     },
     {
-      ...SHOP_CATALOG[0], // Espada do Chefe
+      ...SHOP_CATALOG[0],
       instanceId: "boss-sword",
-      cooldown: 3.5,
+      cooldown: 3.8,
       x: 3,
       y: 1,
       borderColor: "border-[#8b5cf6]",
@@ -127,7 +146,6 @@ export default function App() {
     },
   ]);
 
-  // COMPRAR ITEM DA LOJA
   const buyItem = (itemData: ItemData) => {
     if (gold < itemData.price) {
       alert("Ouro insuficiente!");
@@ -173,7 +191,6 @@ export default function App() {
     setNormalInventory((prev) => [...prev, newItem]);
   };
 
-  // VENDER ITEM (RECUPERA OURO)
   const sellItem = (item: PlacedItem, source: "normal" | "battle") => {
     setGold((prev) => prev + item.sellPrice);
     if (source === "normal") {
@@ -183,7 +200,58 @@ export default function App() {
     }
   };
 
-  // EQUIPAR NO 5x5
+  // Move ou posiciona o item exatamente nas coordenadas alvo (x, y)
+  const moveOrPlaceItem = (
+    item: PlacedItem,
+    source: "normal" | "battle",
+    target: "normal" | "battle",
+    targetX: number,
+    targetY: number
+  ): boolean => {
+    const targetWidth = target === "normal" ? 10 : 5;
+    const targetHeight = target === "normal" ? 6 : 5;
+
+    const clampedX = Math.max(0, Math.min(targetWidth - item.width, targetX));
+    const clampedY = Math.max(0, Math.min(targetHeight - item.height, targetY));
+
+    const targetList = target === "normal" ? normalInventory : playerBattleItems;
+
+    const hasCollision = targetList.some((other) => {
+      if (source === target && other.instanceId === item.instanceId) return false;
+      return (
+        clampedX < other.x + other.width &&
+        clampedX + item.width > other.x &&
+        clampedY < other.y + other.height &&
+        clampedY + item.height > other.y
+      );
+    });
+
+    if (hasCollision) {
+      return false;
+    }
+
+    if (source === "normal") {
+      setNormalInventory((prev) => prev.filter((i) => i.instanceId !== item.instanceId));
+    } else {
+      setPlayerBattleItems((prev) => prev.filter((i) => i.instanceId !== item.instanceId));
+    }
+
+    const updatedItem: PlacedItem = {
+      ...item,
+      x: clampedX,
+      y: clampedY,
+    };
+
+    if (target === "normal") {
+      setNormalInventory((prev) => [...prev, updatedItem]);
+    } else {
+      setPlayerBattleItems((prev) => [...prev, updatedItem]);
+    }
+
+    return true;
+  };
+
+  // Equipar rápido via 2 cliques
   const equipToBattle = (item: PlacedItem) => {
     let placedX = -1;
     let placedY = -1;
@@ -209,7 +277,7 @@ export default function App() {
     }
 
     if (placedX === -1) {
-      alert("Mochila de batalha (5x5) sem espaço para esta peça!");
+      alert("Mochila de batalha (5x5) sem espaço!");
       return;
     }
 
@@ -217,7 +285,7 @@ export default function App() {
     setPlayerBattleItems((prev) => [...prev, { ...item, x: placedX, y: placedY }]);
   };
 
-  // DESEQUIPAR PARA O 10x6
+  // Desequipar rápido via 2 cliques
   const unequipToNormal = (item: PlacedItem) => {
     let placedX = -1;
     let placedY = -1;
@@ -242,43 +310,104 @@ export default function App() {
       if (placedX !== -1) break;
     }
 
+    if (placedX === -1) {
+      alert("Estoque normal (10x6) sem espaço!");
+      return;
+    }
+
     setPlayerBattleItems((prev) => prev.filter((i) => i.instanceId !== item.instanceId));
-    setNormalInventory((prev) => [...prev, { ...item, x: Math.max(0, placedX), y: Math.max(0, placedY) }]);
+    setNormalInventory((prev) => [...prev, { ...item, x: placedX, y: placedY }]);
   };
 
-  const handleVictory = () => {
+  // Memorizado com useCallback para não causar loops de render
+  const handleVictory = useCallback(() => {
     setGold((prev) => prev + 100);
-    setUnlockedLevel((prev) => Math.max(prev, 2));
+    setUnlockedProgress((prev) => Math.max(prev, 2));
+    setCollectedRelics((prev) => {
+      if (!prev.includes("Lágrima de Fogo do Oni")) {
+        return [...prev, "Lágrima de Fogo do Oni"];
+      }
+      return prev;
+    });
+  }, []);
+
+  const handleClaimChest = () => {
+    if (unlockedProgress === 2) {
+      setGold((prev) => prev + 50);
+      setUnlockedProgress(3);
+      setCollectedRelics((prev) => {
+        if (!prev.includes("Fragmento Celestial")) {
+          return [...prev, "Fragmento Celestial"];
+        }
+        return prev;
+      });
+      alert("Baú da Jornada Aberto! +50 de Ouro e Relíquia [Fragmento Celestial] colecionada!");
+    }
   };
 
   return (
     <main className="min-h-screen text-slate-100 flex flex-col font-sans select-none">
       <style jsx global>{`
         @keyframes projectileFlyRight {
-          0% { left: 20%; opacity: 0; transform: translateY(-50%) scale(0.6); }
-          15% { opacity: 1; transform: translateY(-50%) scale(1); }
-          85% { opacity: 1; transform: translateY(-50%) scale(1.1); }
-          100% { left: 78%; opacity: 0; transform: translateY(-50%) scale(1.2); }
+          0% {
+            left: 20%;
+            opacity: 0;
+            transform: translateY(-50%) scale(0.6);
+          }
+          15% {
+            opacity: 1;
+            transform: translateY(-50%) scale(1);
+          }
+          85% {
+            opacity: 1;
+            transform: translateY(-50%) scale(1.1);
+          }
+          100% {
+            left: 78%;
+            opacity: 0;
+            transform: translateY(-50%) scale(1.2);
+          }
         }
 
         @keyframes projectileFlyLeft {
-          0% { right: 20%; opacity: 0; transform: translateY(-50%) scale(0.6) scaleX(-1); }
-          15% { opacity: 1; transform: translateY(-50%) scale(1) scaleX(-1); }
-          85% { opacity: 1; transform: translateY(-50%) scale(1.1) scaleX(-1); }
-          100% { right: 78%; opacity: 0; transform: translateY(-50%) scale(1.2) scaleX(-1); }
+          0% {
+            right: 20%;
+            opacity: 0;
+            transform: translateY(-50%) scale(0.6) scaleX(-1);
+          }
+          15% {
+            opacity: 1;
+            transform: translateY(-50%) scale(1) scaleX(-1);
+          }
+          85% {
+            opacity: 1;
+            transform: translateY(-50%) scale(1.1) scaleX(-1);
+          }
+          100% {
+            right: 78%;
+            opacity: 0;
+            transform: translateY(-50%) scale(1.2) scaleX(-1);
+          }
         }
 
         @keyframes characterShake {
-          0%, 100% { transform: scale(1); filter: brightness(1); }
-          50% { transform: scale(0.95) translateX(6px); filter: brightness(1.7) drop-shadow(0 0 15px #ef4444); }
+          0%,
+          100% {
+            transform: scale(1);
+            filter: brightness(1);
+          }
+          50% {
+            transform: scale(0.95) translateX(6px);
+            filter: brightness(1.7) drop-shadow(0 0 15px #ef4444);
+          }
         }
 
         .animate-projectile-right {
-          animation: projectileFlyRight var(--fly-time, 0.4s) cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+          animation: projectileFlyRight var(--fly-time, 0.7s) cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
 
         .animate-projectile-left {
-          animation: projectileFlyLeft var(--fly-time, 0.4s) cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+          animation: projectileFlyLeft var(--fly-time, 0.7s) cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
 
         .animate-shake {
@@ -290,13 +419,10 @@ export default function App() {
         <HomeScreen
           isLoggedIn={isLoggedIn}
           gold={gold}
-          unlockedLevel={unlockedLevel}
           onLoginClick={() => setCurrentScreen("LOGIN")}
           onLogoutClick={() => setIsLoggedIn(false)}
+          onOpenMap={() => setCurrentScreen("MAP")}
           onGoToPrep={() => setCurrentScreen("INVENTORY_PREP")}
-          onStartLevel={(lvl) => {
-            if (lvl <= unlockedLevel) setCurrentScreen("BATTLE");
-          }}
         />
       )}
 
@@ -310,6 +436,18 @@ export default function App() {
         />
       )}
 
+      {currentScreen === "MAP" && (
+        <WorldMapScreen
+          gold={gold}
+          unlockedProgress={unlockedProgress}
+          collectedRelics={collectedRelics}
+          onStartBoss={() => setCurrentScreen("BATTLE")}
+          onClaimChest={handleClaimChest}
+          onOpenPrep={() => setCurrentScreen("INVENTORY_PREP")}
+          onBack={() => setCurrentScreen("HOME")}
+        />
+      )}
+
       {currentScreen === "INVENTORY_PREP" && (
         <InventoryPrepScreen
           gold={gold}
@@ -317,10 +455,11 @@ export default function App() {
           playerBattleItems={playerBattleItems}
           onBuyItem={buyItem}
           onSellItem={sellItem}
+          onMoveOrPlaceItem={moveOrPlaceItem}
           onEquipItem={equipToBattle}
           onUnequipItem={unequipToNormal}
           onGoToBattle={() => setCurrentScreen("BATTLE")}
-          onBack={() => setCurrentScreen("HOME")}
+          onBack={() => setCurrentScreen("MAP")}
         />
       )}
 
@@ -329,104 +468,11 @@ export default function App() {
           playerItems={playerBattleItems}
           bossItems={bossItems}
           onVictory={handleVictory}
-          onGiveUp={() => setCurrentScreen("INVENTORY_PREP")}
-          onBackToMenu={() => setCurrentScreen("HOME")}
+          onGiveUp={() => setCurrentScreen("MAP")}
+          onBackToMenu={() => setCurrentScreen("MAP")}
         />
       )}
     </main>
-  );
-}
-
-/* ========================================================
-   COMPONENTE DO PROJÉTIL DE FOGO E RAIOS CIANO
-   ======================================================== */
-function PlasmaProjectile({ type }: { type: "player" | "boss" }) {
-  if (type === "player") {
-    return (
-      <div className="absolute top-1/2 -translate-y-1/2 z-30 pointer-events-none animate-projectile-right flex items-center">
-        <svg width="180" height="60" viewBox="0 0 180 60" fill="none" className="drop-shadow-[0_0_15px_#f97316]">
-          <path d="M5 30C30 25 50 18 90 20C120 22 150 12 165 30C150 48 120 38 90 40C50 42 30 35 5 30Z" fill="url(#fireGradient)" />
-          <ellipse cx="145" cy="30" rx="22" ry="14" fill="#fef08a" />
-          <ellipse cx="152" cy="30" rx="14" ry="10" fill="#ffffff" />
-          <path d="M60 22L80 14L95 28L120 16L140 25L160 12" stroke="#22d3ee" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_8px_#22d3ee]" />
-          <path d="M85 36L105 44L125 32L145 42L165 30" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_8px_#38bdf8]" />
-          <defs>
-            <linearGradient id="fireGradient" x1="0" y1="30" x2="170" y2="30" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#ea580c" stopOpacity="0.2" />
-              <stop offset="40%" stopColor="#f97316" />
-              <stop offset="75%" stopColor="#facc15" />
-              <stop offset="100%" stopColor="#fef08a" />
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="absolute top-1/2 -translate-y-1/2 z-30 pointer-events-none animate-projectile-left flex items-center">
-      <svg width="180" height="60" viewBox="0 0 180 60" fill="none" className="drop-shadow-[0_0_15px_#9333ea]">
-        <path d="M5 30C30 25 50 18 90 20C120 22 150 12 165 30C150 48 120 38 90 40C50 42 30 35 5 30Z" fill="url(#bossDarkGradient)" />
-        <ellipse cx="145" cy="30" rx="22" ry="14" fill="#f472b6" />
-        <ellipse cx="152" cy="30" rx="14" ry="10" fill="#ffffff" />
-        <path d="M60 22L80 14L95 28L120 16L140 25L160 12" stroke="#c084fc" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_8px_#c084fc]" />
-        <defs>
-          <linearGradient id="bossDarkGradient" x1="0" y1="30" x2="170" y2="30" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#581c87" stopOpacity="0.2" />
-            <stop offset="40%" stopColor="#7e22ce" />
-            <stop offset="75%" stopColor="#d946ef" />
-            <stop offset="100%" stopColor="#fbcfe8" />
-          </linearGradient>
-        </defs>
-      </svg>
-    </div>
-  );
-}
-
-/* ========================================================
-   COMPONENTE DO TOOLTIP DE ESPECIFICAÇÕES
-   ======================================================== */
-function ItemTooltip({ item }: { item: ItemData }) {
-  return (
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-[#090f18]/95 backdrop-blur-md border border-cyan-500/60 rounded-xl p-3 shadow-[0_10px_30px_rgba(0,0,0,0.95)] opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50 flex flex-col gap-1.5 text-left">
-      <div className="flex justify-between items-start border-b border-slate-700/60 pb-1.5">
-        <div>
-          <h4 className="text-xs font-black text-white tracking-wide">{item.name}</h4>
-          <span className="text-[10px] font-semibold text-cyan-300">{item.type}</span>
-        </div>
-        <span className="text-[9px] font-bold text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700">
-          {item.width}x{item.height}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-1 py-0.5">
-        {item.stats.damage && (
-          <div className="flex items-center gap-1.5 text-xs font-bold text-red-400">
-            <span>⚔️</span> +{item.stats.damage} de Dano {item.cooldown && `(${item.cooldown}s)`}
-          </div>
-        )}
-        {item.stats.armor && (
-          <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
-            <Shield size={13} className="text-sky-400 fill-sky-400/20" /> +{item.stats.armor} de Armadura
-          </div>
-        )}
-        {item.stats.health && (
-          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-            <Heart size={13} className="text-emerald-400 fill-emerald-400/20" /> +{item.stats.health} de Vida
-          </div>
-        )}
-        {item.stats.specialEffect && (
-          <div className="mt-1 pt-1 border-t border-slate-800 flex items-start gap-1.5 text-[11px] font-medium text-cyan-200 leading-tight">
-            <span>❄️</span> {item.stats.specialEffect}
-          </div>
-        )}
-      </div>
-
-      <div className="pt-1.5 border-t border-slate-800/80 flex justify-between items-center text-[10px] font-bold text-amber-400">
-        <span>Venda: {item.sellPrice} Ouro</span>
-        <span className="text-slate-400">Clique para Opções</span>
-      </div>
-    </div>
   );
 }
 
@@ -436,19 +482,17 @@ function ItemTooltip({ item }: { item: ItemData }) {
 function HomeScreen({
   isLoggedIn,
   gold,
-  unlockedLevel,
   onLoginClick,
   onLogoutClick,
+  onOpenMap,
   onGoToPrep,
-  onStartLevel,
 }: {
   isLoggedIn: boolean;
   gold: number;
-  unlockedLevel: number;
   onLoginClick: () => void;
   onLogoutClick: () => void;
+  onOpenMap: () => void;
   onGoToPrep: () => void;
-  onStartLevel: (lvl: number) => void;
 }) {
   return (
     <div className="relative min-h-screen flex flex-col justify-between p-6 bg-gradient-to-b from-[#2a4d69] via-[#1a2f44] to-[#0c1622]">
@@ -476,85 +520,33 @@ function HomeScreen({
         )}
       </header>
 
-      <section className="flex flex-col items-center text-center my-auto px-4 max-w-4xl mx-auto w-full">
-        <h1 className="text-5xl md:text-7xl font-black text-white mb-4 drop-shadow-lg">
+      <section className="flex flex-col items-center text-center my-auto px-4 max-w-xl mx-auto w-full">
+        <div className="inline-block px-3 py-1 mb-4 text-xs font-bold tracking-widest text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 rounded-full">
+          JORNADA PELO MAPA CELESTIAL
+        </div>
+        <h1 className="text-6xl md:text-8xl font-black text-white mb-4 drop-shadow-lg">
           AERIA <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">NEXUS</span>
         </h1>
-        <p className="max-w-md text-slate-300 text-sm md:text-base mb-6">
-          Selecione uma fase para entrar direto na batalha automática em tempo real.
+        <p className="text-slate-300 text-base mb-8">
+          Explore as ilhas flutuantes, colecione relíquias ancestrais e enfrente os Guardiões do Vazio.
         </p>
 
         {isLoggedIn ? (
-          <div className="w-full flex flex-col items-center gap-6">
-            <div className="w-full bg-[#121c2b]/90 border border-slate-700/80 rounded-2xl p-5 shadow-2xl backdrop-blur-md">
-              <h3 className="text-xs font-black tracking-widest text-cyan-300 uppercase mb-4 text-left">
-                SELEÇÃO DE FASES (CLIQUE PARA LUTAR)
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div
-                  onClick={() => onStartLevel(1)}
-                  className="cursor-pointer group relative bg-gradient-to-b from-[#2d121c] to-[#180a11] border-2 border-red-500 hover:border-red-400 rounded-xl p-4 flex flex-col items-center justify-between shadow-lg transition-all hover:scale-105"
-                >
-                  <span className="text-[10px] font-bold text-red-300 bg-red-950/80 px-2 py-0.5 rounded-full border border-red-500/40">
-                    NÍVEL 1
-                  </span>
-                  <img
-                    src="/chefe.png"
-                    alt="Guardião Oni"
-                    className="h-28 object-contain my-2 drop-shadow-[0_4px_12px_rgba(239,68,68,0.5)]"
-                  />
-                  <span className="text-xs font-black text-white tracking-wide">
-                    Guardião Oni (Ignis-Vex)
-                  </span>
-                  <span className="text-[11px] text-emerald-400 font-bold mt-2 flex items-center gap-1">
-                    <Play size={12} fill="#34d399" /> Iniciar Combate
-                  </span>
-                </div>
-
-                <div
-                  onClick={() => unlockedLevel >= 2 && onStartLevel(2)}
-                  className={`relative rounded-xl p-4 flex flex-col items-center justify-between shadow transition-all ${
-                    unlockedLevel >= 2
-                      ? "cursor-pointer bg-gradient-to-b from-[#221035] to-[#12081d] border-2 border-purple-500 hover:scale-105"
-                      : "opacity-60 bg-[#131b26] border border-slate-700 cursor-not-allowed"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
-                    NÍVEL 2
-                  </span>
-                  <div className="h-28 flex items-center justify-center text-slate-500">
-                    {unlockedLevel >= 2 ? (
-                      <CheckCircle2 size={40} className="text-purple-400" />
-                    ) : (
-                      <Lock size={36} />
-                    )}
-                  </div>
-                  <span className="text-xs font-bold text-slate-300">Rainha da Colmeia</span>
-                  <span className="text-[10px] text-slate-500 mt-1">
-                    {unlockedLevel >= 2 ? "Desbloqueado!" : "Vença o Nível 1"}
-                  </span>
-                </div>
-
-                <div className="opacity-60 relative bg-[#131b26] border border-slate-700 rounded-xl p-4 flex flex-col items-center justify-between shadow">
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
-                    NÍVEL 3
-                  </span>
-                  <div className="h-28 flex items-center justify-center text-slate-500">
-                    <Lock size={36} />
-                  </div>
-                  <span className="text-xs font-bold text-slate-400">Arquilorde de Éter</span>
-                  <span className="text-[10px] text-slate-500 mt-1">Vença o Nível 2</span>
-                </div>
-              </div>
-            </div>
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
+            <button
+              onClick={onOpenMap}
+              className="flex-1 w-full py-4 px-6 rounded-xl font-black text-base bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-slate-950 shadow-[0_0_25px_rgba(168,85,247,0.3)] transition-all flex items-center justify-center gap-2.5 hover:scale-105"
+            >
+              <Compass size={22} />
+              EXPLORAR MAPA DE JORNADA
+            </button>
 
             <button
               onClick={onGoToPrep}
-              className="py-3.5 px-8 rounded-xl font-bold text-sm bg-gradient-to-r from-cyan-600 to-blue-700 hover:brightness-110 text-white shadow-lg transition-all flex items-center gap-2"
+              className="w-full sm:w-auto py-4 px-6 rounded-xl font-bold text-sm bg-[#162234] hover:bg-[#1f3048] border border-cyan-500/40 text-cyan-300 shadow transition-all flex items-center justify-center gap-2"
             >
               <Backpack size={18} />
-              ORGANIZAR MOCHILA & LOJA
+              Mochila & Loja
             </button>
           </div>
         ) : (
@@ -567,8 +559,232 @@ function HomeScreen({
         )}
       </section>
 
-      <footer className="text-center text-xs text-slate-400 py-4">
-        Aeria Nexus © 2026
+      <footer className="text-center text-xs text-slate-400 py-4">Aeria Nexus © 2026</footer>
+    </div>
+  );
+}
+
+/* ========================================================
+   TELA DE WORLD MAP
+   ======================================================== */
+function WorldMapScreen({
+  gold,
+  unlockedProgress,
+  collectedRelics,
+  onStartBoss,
+  onClaimChest,
+  onOpenPrep,
+  onBack,
+}: {
+  gold: number;
+  unlockedProgress: number;
+  collectedRelics: string[];
+  onStartBoss: () => void;
+  onClaimChest: () => void;
+  onOpenPrep: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="min-h-screen flex flex-col justify-between p-4 md:p-6 bg-[#080d16] relative overflow-hidden">
+      <header className="max-w-7xl w-full mx-auto flex flex-col md:flex-row justify-between items-center gap-4 pb-4 border-b border-slate-800/80 relative z-20">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-slate-400 hover:text-white text-xs font-semibold bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800"
+          >
+            <ArrowLeft size={16} /> Menu Principal
+          </button>
+          <div className="flex items-center gap-2 font-black text-sm text-cyan-300 tracking-wider">
+            <Compass size={18} className="text-cyan-400" />
+            MAPA DE JORNADA CELESTIAL
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 bg-[#0f1726]/90 border border-cyan-500/30 rounded-xl px-4 py-2 shadow-lg backdrop-blur-sm">
+          <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+            <Sparkles size={14} className="text-amber-400" />
+            Coleção de Relíquias:
+          </span>
+          <div className="flex items-center gap-2">
+            <div
+              title={collectedRelics.includes("Lágrima de Fogo do Oni") ? "Lágrima de Fogo do Oni (Coletada)" : "Espaço Vazio"}
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center text-xs transition-all ${
+                collectedRelics.includes("Lágrima de Fogo do Oni")
+                  ? "bg-red-950/80 border-red-500 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+                  : "bg-slate-900/80 border-slate-800 text-slate-600"
+              }`}
+            >
+              🔥
+            </div>
+
+            <div
+              title={collectedRelics.includes("Fragmento Celestial") ? "Fragmento Celestial (Coletado)" : "Espaço Vazio"}
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center text-xs transition-all ${
+                collectedRelics.includes("Fragmento Celestial")
+                  ? "bg-amber-950/80 border-amber-500 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.5)]"
+                  : "bg-slate-900/80 border-slate-800 text-slate-600"
+              }`}
+            >
+              💎
+            </div>
+
+            <div
+              title="Orbe de Éter (Bloqueado)"
+              className="w-7 h-7 rounded-lg border bg-slate-900/80 border-slate-800 text-slate-600 flex items-center justify-center text-xs"
+            >
+              🔒
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-950/80 border border-amber-500/60 text-amber-300 font-bold text-sm shadow">
+            <Coins size={16} /> {gold} Ouro
+          </div>
+
+          <button
+            onClick={onOpenPrep}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg transition-all"
+          >
+            <Backpack size={16} /> Mochila & Loja
+          </button>
+        </div>
+      </header>
+
+      <section className="relative w-full max-w-6xl mx-auto flex-1 my-4 bg-gradient-to-b from-[#101b2b] via-[#0d1624] to-[#070b12] border-2 border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none opacity-30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyan-900/30 via-slate-950 to-black" />
+
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+          <path
+            d="M 120 400 Q 250 480 380 320 T 640 240 T 880 140"
+            fill="none"
+            stroke="#1e2d42"
+            strokeWidth="16"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 120 400 Q 250 480 380 320 T 640 240 T 880 140"
+            fill="none"
+            stroke="#00f0ff"
+            strokeWidth="4"
+            strokeDasharray="8 6"
+            className="opacity-70 animate-pulse"
+          />
+        </svg>
+
+        <div className="relative z-20 w-full h-full min-h-[480px]">
+          {/* NÓ 1: TEMPLO DO ONI */}
+          <div className="absolute left-[8%] bottom-[12%] flex flex-col items-center">
+            {unlockedProgress === 1 && (
+              <div className="absolute -top-16 flex flex-col items-center animate-bounce z-30">
+                <span className="text-[10px] font-black text-cyan-300 bg-black/80 px-2 py-0.5 rounded-full border border-cyan-400">
+                  VOCÊ ESTÁ AQUI
+                </span>
+                <div className="w-8 h-8 rounded-full border-2 border-cyan-400 shadow-[0_0_15px_#22d3ee] overflow-hidden bg-slate-900 mt-1">
+                  <img src="/jogador.png" alt="Jogador" className="w-full h-full object-contain" />
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={onStartBoss}
+              className="group relative w-24 h-24 rounded-2xl bg-gradient-to-b from-[#3a1520] to-[#1c080e] border-4 border-red-500 hover:border-red-400 shadow-[0_0_25px_rgba(239,68,68,0.5)] p-2 flex flex-col items-center justify-between transition-all hover:scale-110 cursor-pointer"
+            >
+              <span className="text-[9px] font-black tracking-wider text-red-300 uppercase">
+                FASE 1
+              </span>
+              <img src="/chefe.png" alt="Oni" className="h-12 object-contain drop-shadow" />
+              <span className="text-[10px] font-black text-white">Guardião Oni</span>
+            </button>
+            <span className="text-[11px] font-bold text-emerald-400 mt-2 flex items-center gap-1 bg-black/70 px-2 py-0.5 rounded-md">
+              <CheckCircle2 size={12} /> Desbloqueado
+            </span>
+          </div>
+
+          {/* NÓ 2: BAÚ */}
+          <div className="absolute left-[34%] bottom-[38%] flex flex-col items-center">
+            {unlockedProgress === 2 && (
+              <div className="absolute -top-14 flex flex-col items-center animate-bounce z-30">
+                <span className="text-[10px] font-black text-amber-300 bg-black/80 px-2 py-0.5 rounded-full border border-amber-400">
+                  ABRIR BAÚ
+                </span>
+              </div>
+            )}
+
+            <button
+              onClick={onClaimChest}
+              disabled={unlockedProgress < 2}
+              className={`relative w-16 h-16 rounded-xl border-3 flex flex-col items-center justify-center transition-all ${
+                unlockedProgress >= 2
+                  ? "bg-amber-950/80 border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.5)] cursor-pointer hover:scale-110 animate-pulse"
+                  : "bg-slate-900/80 border-slate-800 text-slate-600 cursor-not-allowed"
+              }`}
+            >
+              <Gift size={24} />
+              <span className="text-[8px] font-black mt-1">BAÚ</span>
+            </button>
+            <span className="text-[10px] font-semibold text-slate-400 mt-1">
+              {unlockedProgress >= 2 ? "Clique para Coletar!" : "Recompensa Nível 1"}
+            </span>
+          </div>
+
+          {/* NÓ 3: RAINHA COLMEIA */}
+          <div className="absolute left-[58%] top-[32%] flex flex-col items-center">
+            {unlockedProgress === 3 && (
+              <div className="absolute -top-16 flex flex-col items-center animate-bounce z-30">
+                <span className="text-[10px] font-black text-cyan-300 bg-black/80 px-2 py-0.5 rounded-full border border-cyan-400">
+                  VOCÊ ESTÁ AQUI
+                </span>
+                <div className="w-8 h-8 rounded-full border-2 border-cyan-400 shadow-[0_0_15px_#22d3ee] overflow-hidden bg-slate-900 mt-1">
+                  <img src="/jogador.png" alt="Jogador" className="w-full h-full object-contain" />
+                </div>
+              </div>
+            )}
+
+            <div
+              className={`relative w-22 h-22 rounded-2xl border-4 flex flex-col items-center justify-between p-2 shadow-xl transition-all ${
+                unlockedProgress >= 3
+                  ? "bg-gradient-to-b from-[#2b103c] to-[#14061d] border-purple-500 cursor-pointer hover:scale-110 shadow-[0_0_25px_rgba(168,85,247,0.5)]"
+                  : "bg-[#111722]/80 border-slate-800 opacity-60 cursor-not-allowed"
+              }`}
+            >
+              <span className="text-[9px] font-black tracking-wider text-purple-300 uppercase">
+                FASE 2
+              </span>
+              <div className="h-10 flex items-center justify-center">
+                {unlockedProgress >= 3 ? <Sparkles size={28} className="text-purple-400" /> : <Lock size={24} className="text-slate-600" />}
+              </div>
+              <span className="text-[10px] font-bold text-slate-300">Rainha Colmeia</span>
+            </div>
+            <span className="text-[10px] text-slate-500 mt-1.5">
+              {unlockedProgress >= 3 ? "Pronto para o Combate" : "Bloqueado"}
+            </span>
+          </div>
+
+          {/* NÓ 4: ARQUILORDE */}
+          <div className="absolute right-[8%] top-[10%] flex flex-col items-center">
+            <div className="opacity-50 relative w-24 h-24 rounded-2xl bg-[#0e141f] border-4 border-slate-800 p-2 flex flex-col items-center justify-between shadow cursor-not-allowed">
+              <span className="text-[9px] font-black tracking-wider text-slate-500 uppercase">
+                CHEFE FINAL
+              </span>
+              <Lock size={28} className="text-slate-600 my-auto" />
+              <span className="text-[10px] font-bold text-slate-500">Arquilorde</span>
+            </div>
+            <span className="text-[10px] text-slate-600 mt-1">Nível 3 (Bloqueado)</span>
+          </div>
+        </div>
+
+        <div className="relative z-20 flex justify-between items-center text-xs text-slate-400 pt-3 border-t border-slate-800">
+          <span className="flex items-center gap-1.5">
+            <MapPin size={14} className="text-cyan-400" />
+            Percorra a estrada celestial: vença o Guardião para abrir o baú e avançar para a Fase 2.
+          </span>
+          <span className="font-bold text-cyan-400">Aeria Nexus World Map</span>
+        </div>
+      </section>
+
+      <footer className="text-center text-xs text-slate-500 py-2">
+        Aeria Nexus © 2026 — Mapa de Jornada e Progressão
       </footer>
     </div>
   );
@@ -610,7 +826,54 @@ function LoginScreen({ onSuccess, onBack }: { onSuccess: () => void; onBack: () 
 }
 
 /* ========================================================
-   TELA DE PREPARAÇÃO COM DRAG & DROP E MODAL DE VENDA
+   TOOLTIP DE ITENS
+   ======================================================== */
+function ItemTooltip({ item }: { item: ItemData }) {
+  return (
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-[#090f18]/95 backdrop-blur-md border border-cyan-500/60 rounded-xl p-3 shadow-[0_10px_30px_rgba(0,0,0,0.95)] opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50 flex flex-col gap-1.5 text-left">
+      <div className="flex justify-between items-start border-b border-slate-700/60 pb-1.5">
+        <div>
+          <h4 className="text-xs font-black text-white tracking-wide">{item.name}</h4>
+          <span className="text-[10px] font-semibold text-cyan-300">{item.type}</span>
+        </div>
+        <span className="text-[9px] font-bold text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700">
+          {item.width}x{item.height}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-1 py-0.5">
+        {item.stats.damage && (
+          <div className="flex items-center gap-1.5 text-xs font-bold text-red-400">
+            <span>⚔️</span> +{item.stats.damage} de Dano {item.cooldown && `(${item.cooldown}s)`}
+          </div>
+        )}
+        {item.stats.armor && (
+          <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
+            <Shield size={13} className="text-sky-400 fill-sky-400/20" /> +{item.stats.armor} de Armadura
+          </div>
+        )}
+        {item.stats.health && (
+          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+            <Heart size={13} className="text-emerald-400 fill-emerald-400/20" /> +{item.stats.health} de Vida
+          </div>
+        )}
+        {item.stats.specialEffect && (
+          <div className="mt-1 pt-1 border-t border-slate-800 flex items-start gap-1.5 text-[11px] font-medium text-cyan-200 leading-tight">
+            <span>❄️</span> {item.stats.specialEffect}
+          </div>
+        )}
+      </div>
+
+      <div className="pt-1.5 border-t border-slate-800/80 flex justify-between items-center text-[10px] font-bold text-amber-400">
+        <span>Venda: {item.sellPrice} Ouro</span>
+        <span className="text-slate-400">Arraste ou 2 cliques</span>
+      </div>
+    </div>
+  );
+}
+
+/* ========================================================
+   TELA DE PREPARAÇÃO
    ======================================================== */
 function InventoryPrepScreen({
   gold,
@@ -618,6 +881,7 @@ function InventoryPrepScreen({
   playerBattleItems,
   onBuyItem,
   onSellItem,
+  onMoveOrPlaceItem,
   onEquipItem,
   onUnequipItem,
   onGoToBattle,
@@ -628,47 +892,61 @@ function InventoryPrepScreen({
   playerBattleItems: PlacedItem[];
   onBuyItem: (item: ItemData) => void;
   onSellItem: (item: PlacedItem, source: "normal" | "battle") => void;
+  onMoveOrPlaceItem: (
+    item: PlacedItem,
+    source: "normal" | "battle",
+    target: "normal" | "battle",
+    targetX: number,
+    targetY: number
+  ) => boolean;
   onEquipItem: (item: PlacedItem) => void;
   onUnequipItem: (item: PlacedItem) => void;
   onGoToBattle: () => void;
   onBack: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"INVENTORY" | "SHOP">("INVENTORY");
-
-  // Item selecionado para o menu de ações (Vender / Equipar / Desequipar)
   const [selectedActionItem, setSelectedActionItem] = useState<{
     item: PlacedItem;
     source: "normal" | "battle";
   } | null>(null);
 
-  // MANIPULADORES DE DRAG & DROP
   const handleDragStart = (e: React.DragEvent, item: PlacedItem, source: "normal" | "battle") => {
-    e.dataTransfer.setData("application/json", JSON.stringify({ item, source }));
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    e.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({ item, source, offsetX, offsetY })
+    );
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const handleDropOnBattle = (e: React.DragEvent) => {
+  const handleGridDrop = (e: React.DragEvent, targetGrid: "normal" | "battle") => {
     e.preventDefault();
     const dataStr = e.dataTransfer.getData("application/json");
     if (!dataStr) return;
-    try {
-      const { item, source } = JSON.parse(dataStr);
-      if (source === "normal") {
-        onEquipItem(item);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  const handleDropOnNormal = (e: React.DragEvent) => {
-    e.preventDefault();
-    const dataStr = e.dataTransfer.getData("application/json");
-    if (!dataStr) return;
     try {
-      const { item, source } = JSON.parse(dataStr);
-      if (source === "battle") {
-        onUnequipItem(item);
+      const { item, source, offsetX = 0, offsetY = 0 } = JSON.parse(dataStr);
+      const rect = e.currentTarget.getBoundingClientRect();
+
+      const cols = targetGrid === "normal" ? 10 : 5;
+      const rows = targetGrid === "normal" ? 6 : 5;
+      const cellWidth = rect.width / cols;
+      const cellHeight = rect.height / rows;
+
+      const dropX = e.clientX - rect.left - (offsetX % cellWidth);
+      const dropY = e.clientY - rect.top - (offsetY % cellHeight);
+
+      let targetX = Math.round(dropX / cellWidth);
+      let targetY = Math.round(dropY / cellHeight);
+
+      targetX = Math.max(0, Math.min(cols - item.width, targetX));
+      targetY = Math.max(0, Math.min(rows - item.height, targetY));
+
+      const success = onMoveOrPlaceItem(item, source, targetGrid, targetX, targetY);
+      if (!success) {
+        alert("Espaço ocupado ou insuficiente para colocar o item aqui!");
       }
     } catch (err) {
       console.error(err);
@@ -679,7 +957,7 @@ function InventoryPrepScreen({
     <div className="min-h-screen flex flex-col justify-between p-4 md:p-6 bg-[#0a0f18] text-slate-100">
       <header className="max-w-7xl w-full mx-auto flex justify-between items-center pb-4 border-b border-slate-800">
         <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-semibold">
-          <ArrowLeft size={18} /> Voltar ao Menu
+          <ArrowLeft size={18} /> Voltar ao Mapa
         </button>
 
         <div className="flex items-center gap-3">
@@ -736,11 +1014,11 @@ function InventoryPrepScreen({
                   key={item.id}
                   className="group bg-[#0b1019] border border-slate-800 hover:border-cyan-500/60 rounded-xl p-4 flex flex-col justify-between items-center text-center shadow-lg relative transition-all"
                 >
-                  {/* Tooltip Universal na Loja */}
                   <ItemTooltip item={item} />
-
                   <span className="text-xs font-black text-white">{item.name}</span>
-                  <span className="text-[10px] text-slate-400">{item.type} ({item.width}x{item.height})</span>
+                  <span className="text-[10px] text-slate-400">
+                    {item.type} ({item.width}x{item.height})
+                  </span>
 
                   <img src={item.imageUrl} alt={item.name} className="h-28 object-contain my-3 drop-shadow" />
 
@@ -767,14 +1045,16 @@ function InventoryPrepScreen({
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* 1. INVENTÁRIO NORMAL (ESTOQUE 10x6) - ACEITA DROP */}
+            {/* INVENTÁRIO NORMAL (10x6) */}
             <div className="lg:col-span-7 flex flex-col gap-2">
               <div className="flex justify-between items-center px-1">
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider">
                     INVENTÁRIO NORMAL (ESTOQUE 10x6)
                   </h3>
-                  <span className="text-xs text-slate-400">Arraste ou clique para opções / venda</span>
+                  <span className="text-xs text-slate-400">
+                    Arraste livremente para o slot desejado ou dê 2 cliques para equipar
+                  </span>
                 </div>
                 <span className="text-xs font-bold text-cyan-400 bg-cyan-950/60 px-2.5 py-1 rounded-full border border-cyan-800">
                   {normalInventory.length} Peças
@@ -783,7 +1063,7 @@ function InventoryPrepScreen({
 
               <div
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={handleDropOnNormal}
+                onDrop={(e) => handleGridDrop(e, "normal")}
                 className="w-full aspect-[10/6] bg-[#0c121d] border-4 border-[#1b2636] rounded-2xl p-2.5 shadow-2xl relative"
               >
                 <div className="absolute inset-2.5 grid grid-cols-10 grid-rows-6 gap-1 pointer-events-none">
@@ -792,37 +1072,46 @@ function InventoryPrepScreen({
                   ))}
                 </div>
 
-                <div className="relative z-10 w-full h-full grid grid-cols-10 grid-rows-6 gap-1">
+                <div className="relative z-10 w-full h-full grid grid-cols-10 grid-rows-6 gap-1 pointer-events-none">
                   {normalInventory.map((item) => (
                     <div
                       key={item.instanceId}
                       draggable
                       onDragStart={(e) => handleDragStart(e, item, "normal")}
                       onClick={() => setSelectedActionItem({ item, source: "normal" })}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        onEquipItem(item);
+                        setSelectedActionItem(null);
+                      }}
                       style={{
                         gridColumn: `${item.x + 1} / span ${item.width}`,
                         gridRow: `${item.y + 1} / span ${item.height}`,
                       }}
-                      className={`group rounded-lg border-2 ${item.borderColor} ${item.bgColor} p-1 flex items-center justify-center shadow-lg relative cursor-grab active:cursor-grabbing hover:scale-[1.02] transition-all`}
+                      className={`group rounded-lg border-2 ${item.borderColor} ${item.bgColor} p-1 flex items-center justify-center shadow-lg relative cursor-grab active:cursor-grabbing hover:scale-[1.02] transition-all pointer-events-auto`}
                     >
-                      {/* Tooltip ao passar o mouse */}
                       <ItemTooltip item={item} />
-
-                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain pointer-events-none drop-shadow" />
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="w-full h-full object-contain pointer-events-none drop-shadow"
+                      />
                     </div>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* 2. MOCHILA DE BATALHA (5x5) - ACEITA DROP */}
+            {/* MOCHILA DE BATALHA (5x5) */}
             <div className="lg:col-span-5 flex flex-col gap-2">
               <div className="flex justify-between items-center px-1">
                 <div>
                   <h3 className="text-sm font-black text-cyan-300 uppercase tracking-wider">
                     MOCHILA DE BATALHA (5x5)
                   </h3>
-                  <span className="text-xs text-slate-400">Solte os itens aqui para o combate</span>
+                  <span className="text-xs text-slate-400">
+                    Arraste livremente para o slot desejado ou dê 2 cliques para desequipar
+                  </span>
                 </div>
                 <span className="text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-800">
                   {playerBattleItems.length} Equipados
@@ -831,7 +1120,7 @@ function InventoryPrepScreen({
 
               <div
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={handleDropOnBattle}
+                onDrop={(e) => handleGridDrop(e, "battle")}
                 className="w-full aspect-square bg-[#0e1624] border-4 border-[#1e2a3c] rounded-2xl p-2.5 shadow-2xl relative"
               >
                 <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
@@ -840,23 +1129,30 @@ function InventoryPrepScreen({
                   ))}
                 </div>
 
-                <div className="relative z-10 w-full h-full grid grid-cols-5 grid-rows-5 gap-1.5">
+                <div className="relative z-10 w-full h-full grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
                   {playerBattleItems.map((item) => (
                     <div
                       key={item.instanceId}
                       draggable
                       onDragStart={(e) => handleDragStart(e, item, "battle")}
                       onClick={() => setSelectedActionItem({ item, source: "battle" })}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        onUnequipItem(item);
+                        setSelectedActionItem(null);
+                      }}
                       style={{
                         gridColumn: `${item.x + 1} / span ${item.width}`,
                         gridRow: `${item.y + 1} / span ${item.height}`,
                       }}
-                      className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-1.5 flex items-center justify-center shadow-lg relative cursor-grab active:cursor-grabbing hover:brightness-110 transition-all`}
+                      className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-1.5 flex items-center justify-center shadow-lg relative cursor-grab active:cursor-grabbing hover:brightness-110 transition-all pointer-events-auto`}
                     >
-                      {/* Tooltip ao passar o mouse */}
                       <ItemTooltip item={item} />
-
-                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain pointer-events-none drop-shadow relative z-10" />
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="w-full h-full object-contain pointer-events-none drop-shadow relative z-10"
+                      />
                     </div>
                   ))}
                 </div>
@@ -866,7 +1162,6 @@ function InventoryPrepScreen({
         )}
       </div>
 
-      {/* MODAL DE AÇÕES DO ITEM: VENDER / EQUIPAR / GUARDAR */}
       {selectedActionItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="max-w-sm w-full bg-[#111927] border-2 border-slate-700 rounded-2xl p-5 shadow-2xl relative flex flex-col items-center">
@@ -884,7 +1179,9 @@ function InventoryPrepScreen({
             />
 
             <h3 className="text-base font-black text-white">{selectedActionItem.item.name}</h3>
-            <span className="text-xs text-slate-400 mb-4">{selectedActionItem.item.type} ({selectedActionItem.item.width}x{selectedActionItem.item.height})</span>
+            <span className="text-xs text-slate-400 mb-4">
+              {selectedActionItem.item.type} ({selectedActionItem.item.width}x{selectedActionItem.item.height})
+            </span>
 
             <div className="w-full flex flex-col gap-2.5">
               {selectedActionItem.source === "normal" ? (
@@ -924,14 +1221,14 @@ function InventoryPrepScreen({
       )}
 
       <footer className="text-center text-xs text-slate-500 py-2 border-t border-slate-800">
-        Aeria Nexus — Arraste para equipar/desequipar ou clique para vender itens.
+        Aeria Nexus — Arraste para a posição desejada ou dê 2 cliques para equipar/desequipar.
       </footer>
     </div>
   );
 }
 
 /* ========================================================
-   TELA DA ARENA (BATALHA)
+   TELA DA ARENA (COM TRAVA DE VITÓRIA SEGURA VIA REF)
    ======================================================== */
 function BattleScreen({
   playerItems,
@@ -948,18 +1245,24 @@ function BattleScreen({
 }) {
   const extraHealth = playerItems.reduce((acc, item) => acc + (item.stats.health || 0), 0);
   const extraArmor = playerItems.reduce((acc, item) => acc + (item.stats.armor || 0), 0);
+  const weaponsDamage = playerItems.reduce((acc, item) => acc + (item.stats.damage || 0), 0);
+
+  // Jogador começa com 100 de vida base + bônus de itens (ex: Coração Biomecânico)
+  const basePlayerHp = 100;
+  const maxPlayerHp = basePlayerHp + extraHealth;
+
+  // Escudo vem dos equipamentos (Escudo do Dragão, Armadura Carmesim)
+  const maxPlayerShield = extraArmor;
+
   const playerSword = playerItems.find((i) => i.id === "espada-celestial");
-  const playerDamage = playerSword?.stats.damage || (playerItems.length > 0 ? 5 : 2);
-  const playerCooldown = playerSword?.cooldown || 3.5; // Recarga de 3.5s
+  const playerDamage = weaponsDamage > 0 ? weaponsDamage : (playerItems.length > 0 ? 8 : 4);
+  const playerCooldown = playerSword?.cooldown || 3.0;
 
-  const bossSword = bossItems.find((i) => i.id === "espada-celestial");
-  const bossDamage = 25;
-  const bossCooldown = bossSword?.cooldown || 3.5;
-
-  const maxPlayerHp = 300 + extraHealth;
-  const maxPlayerShield = 80 + extraArmor;
-  const maxBossHp = 600;
-  const maxBossShield = 350;
+  // Chefe ajustado
+  const maxBossHp = 220;
+  const maxBossShield = 60;
+  const bossDamage = 12;
+  const bossCooldown = 3.8;
 
   const [playerHp, setPlayerHp] = useState<number>(maxPlayerHp);
   const [playerShield, setPlayerShield] = useState<number>(maxPlayerShield);
@@ -980,7 +1283,17 @@ function BattleScreen({
   const [floatingDamage, setFloatingDamage] = useState<{ text: string; color: string } | null>(null);
   const [bossFrozenTimer, setBossFrozenTimer] = useState<number>(0);
 
-  const projectileFlightTime = speedMultiplier === 1 ? 400 : 200;
+  const projectileFlightTime = speedMultiplier === 1 ? 700 : 350;
+
+  // Trava para executar onVictory exatamente uma vez
+  const victoryReportedRef = useRef(false);
+
+  useEffect(() => {
+    if (combatStatus === "VICTORY" && !victoryReportedRef.current) {
+      victoryReportedRef.current = true;
+      onVictory();
+    }
+  }, [combatStatus, onVictory]);
 
   useEffect(() => {
     if (combatStatus !== "FIGHTING") return;
@@ -996,7 +1309,7 @@ function BattleScreen({
           setPlayerShooting(true);
 
           setTimeout(() => {
-            const willFreeze = Math.random() < 0.35;
+            const willFreeze = Math.random() < 0.4;
             if (willFreeze) setBossFrozenTimer(2.0);
 
             setBossShaking(true);
@@ -1019,9 +1332,8 @@ function BattleScreen({
               if (remDmg > 0) {
                 setBossHp((prevHp) => {
                   const finalHp = Math.max(0, prevHp - remDmg);
-                  if (finalHp === 0) {
+                  if (finalHp === 0 && prevHp > 0) {
                     setCombatStatus("VICTORY");
-                    onVictory();
                   }
                   return finalHp;
                 });
@@ -1042,62 +1354,71 @@ function BattleScreen({
         return next;
       });
 
-      // 2. CARREGAMENTO DO CHEFE
+      // 2. CONGELAMENTO DO CHEFE
       setBossFrozenTimer((prevFreeze) => {
         if (prevFreeze > 0) {
           return Math.max(0, prevFreeze - deltaSeconds);
         }
-
-        setBossCharge((prev) => {
-          const next = prev + (deltaSeconds / bossCooldown) * 100;
-          if (next >= 100) {
-            setBossShooting(true);
-
-            setTimeout(() => {
-              setPlayerShaking(true);
-              setTimeout(() => setPlayerShaking(false), 250);
-
-              setPlayerShield((prevShield) => {
-                let remDmg = bossDamage;
-                let newShield = prevShield;
-
-                if (prevShield > 0) {
-                  if (prevShield >= remDmg) {
-                    newShield = prevShield - remDmg;
-                    remDmg = 0;
-                  } else {
-                    remDmg -= prevShield;
-                    newShield = 0;
-                  }
-                }
-
-                if (remDmg > 0) {
-                  setPlayerHp((prevHp) => {
-                    const finalHp = Math.max(0, prevHp - remDmg);
-                    if (finalHp === 0) {
-                      setCombatStatus("DEFEAT");
-                    }
-                    return finalHp;
-                  });
-                }
-                return newShield;
-              });
-
-              setBossShooting(false);
-            }, projectileFlightTime);
-
-            return 0;
-          }
-          return next;
-        });
-
         return 0;
       });
 
+      // 3. CARREGAMENTO DO CHEFE (apenas se não estiver congelado)
+      setBossCharge((prev) => {
+        if (bossFrozenTimer > 0) return prev;
+
+        const next = prev + (deltaSeconds / bossCooldown) * 100;
+        if (next >= 100) {
+          setBossShooting(true);
+
+          setTimeout(() => {
+            setPlayerShaking(true);
+            setTimeout(() => setPlayerShaking(false), 250);
+
+            setPlayerShield((prevShield) => {
+              let remDmg = bossDamage;
+              let newShield = prevShield;
+
+              if (prevShield > 0) {
+                if (prevShield >= remDmg) {
+                  newShield = prevShield - remDmg;
+                  remDmg = 0;
+                } else {
+                  remDmg -= prevShield;
+                  newShield = 0;
+                }
+              }
+
+              if (remDmg > 0) {
+                setPlayerHp((prevHp) => {
+                  const finalHp = Math.max(0, prevHp - remDmg);
+                  if (finalHp === 0 && prevHp > 0) {
+                    setCombatStatus("DEFEAT");
+                  }
+                  return finalHp;
+                });
+              }
+              return newShield;
+            });
+
+            setBossShooting(false);
+          }, projectileFlightTime);
+
+          return 0;
+        }
+        return next;
+      });
     }, tickMs);
 
     return () => clearInterval(interval);
-  }, [combatStatus, speedMultiplier, playerCooldown, bossCooldown, playerDamage, projectileFlightTime]);
+  }, [
+    combatStatus,
+    speedMultiplier,
+    playerCooldown,
+    bossCooldown,
+    playerDamage,
+    projectileFlightTime,
+    bossFrozenTimer,
+  ]);
 
   return (
     <div
@@ -1111,7 +1432,9 @@ function BattleScreen({
         <div className="w-full max-w-[420px] flex flex-col gap-1.5">
           <div className="flex justify-between text-sm font-bold text-white drop-shadow">
             <span>JOGADOR 1 (Você)</span>
-            <span className="text-xs">{playerHp} / {maxPlayerHp}</span>
+            <span className="text-xs">
+              {playerHp} / {maxPlayerHp} HP {maxPlayerShield > 0 && `(+${playerShield} Escudo)`}
+            </span>
           </div>
           <div className="h-6 w-full bg-[#171c26]/90 border-2 border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Heart size={14} className="text-red-500 fill-red-500 absolute left-1.5 z-10" />
@@ -1119,7 +1442,10 @@ function BattleScreen({
           </div>
           <div className="h-4 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1.5 z-10" />
-            <div className="h-full bg-sky-500 transition-all duration-150" style={{ width: `${(playerShield / maxPlayerShield) * 100}%` }} />
+            <div
+              className="h-full bg-sky-500 transition-all duration-150"
+              style={{ width: `${maxPlayerShield > 0 ? (playerShield / maxPlayerShield) * 100 : 0}%` }}
+            />
           </div>
         </div>
 
@@ -1136,7 +1462,9 @@ function BattleScreen({
         <div className="w-full max-w-[420px] md:ml-auto flex flex-col gap-1.5">
           <div className="flex justify-between text-sm font-bold text-white drop-shadow">
             <span>CHEFE (Guardião Oni)</span>
-            <span className="text-xs">{bossHp} / {maxBossHp}</span>
+            <span className="text-xs">
+              {bossHp} / {maxBossHp} HP {maxBossShield > 0 && `(+${bossShield} Escudo)`}
+            </span>
           </div>
           <div className="h-6 w-full bg-[#171c26]/90 border-2 border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Heart size={14} className="text-red-500 fill-red-500 absolute left-1.5 z-10" />
@@ -1144,13 +1472,37 @@ function BattleScreen({
           </div>
           <div className="h-4 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1.5 z-10" />
-            <div className="h-full bg-sky-500 transition-all duration-150 ml-auto" style={{ width: `${(bossShield / maxBossShield) * 100}%` }} />
+            <div
+              className="h-full bg-sky-500 transition-all duration-150 ml-auto"
+              style={{ width: `${maxBossShield > 0 ? (bossShield / maxBossShield) * 100 : 0}%` }}
+            />
           </div>
         </div>
       </header>
 
-      {/* 2. PERSONAGENS COM DISPARO DE PROJÉTIL */}
+      {/* 2. PERSONAGENS E ARENA */}
       <section className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 items-end my-1 h-52 md:h-64 pointer-events-none relative z-10">
+        {/* PROJÉTIL DO JOGADOR */}
+        {playerShooting && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 z-30 animate-projectile-right pointer-events-none"
+            style={{ "--fly-time": `${projectileFlightTime}ms` } as React.CSSProperties}
+          >
+            <PlasmaProjectile type="player" />
+          </div>
+        )}
+
+        {/* PROJÉTIL DO CHEFE */}
+        {bossShooting && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 z-30 animate-projectile-left pointer-events-none"
+            style={{ "--fly-time": `${projectileFlightTime}ms` } as React.CSSProperties}
+          >
+            <PlasmaProjectile type="boss" />
+          </div>
+        )}
+
+        {/* JOGADOR */}
         <div className="w-full max-w-[420px] flex justify-center">
           <img
             src="/jogador.png"
@@ -1161,19 +1513,8 @@ function BattleScreen({
           />
         </div>
 
+        {/* DANO FLUTUANTE */}
         <div className="relative flex flex-col items-center justify-center pb-8 font-mono font-black text-center drop-shadow min-h-[80px] w-full">
-          {playerShooting && (
-            <div style={{ "--fly-time": `${projectileFlightTime}ms` } as React.CSSProperties}>
-              <PlasmaProjectile type="player" />
-            </div>
-          )}
-
-          {bossShooting && (
-            <div style={{ "--fly-time": `${projectileFlightTime}ms` } as React.CSSProperties}>
-              <PlasmaProjectile type="boss" />
-            </div>
-          )}
-
           {floatingDamage && (
             <span className={`text-xl md:text-2xl font-black ${floatingDamage.color} animate-bounce z-40`}>
               {floatingDamage.text}
@@ -1181,6 +1522,7 @@ function BattleScreen({
           )}
         </div>
 
+        {/* CHEFE */}
         <div className="w-full max-w-[420px] md:ml-auto flex justify-center">
           <img
             src="/chefe.png"
@@ -1192,9 +1534,8 @@ function BattleScreen({
         </div>
       </section>
 
-      {/* 3. PAINÉIS DE INVENTÁRIO (COM TOOLTIPS AO PASSAR O MOUSE NA BATALHA) */}
+      {/* 3. PAINÉIS DE INVENTÁRIO 5x5 */}
       <section className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 items-start relative z-10">
-        
         {/* INVENTÁRIO DO JOGADOR */}
         <div className="w-full max-w-[420px] aspect-square bg-[#0e1624]/90 backdrop-blur-sm border-4 border-[#1e2a3c] rounded-2xl p-2.5 shadow-2xl relative">
           <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
@@ -1213,10 +1554,12 @@ function BattleScreen({
                 }}
                 className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-2 flex items-center justify-center shadow-lg relative overflow-hidden`}
               >
-                {/* Tooltip também na arena */}
                 <ItemTooltip item={item} />
-
-                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain pointer-events-none drop-shadow relative z-10" />
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  className="w-full h-full object-contain pointer-events-none drop-shadow relative z-10"
+                />
 
                 {item.id === "espada-celestial" && (
                   <div className="absolute bottom-1.5 left-2 right-2 h-2 bg-black/80 rounded-full overflow-hidden border border-cyan-400/50 z-20 shadow">
@@ -1250,8 +1593,11 @@ function BattleScreen({
                 className={`group rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-2 flex items-center justify-center shadow-lg relative overflow-hidden`}
               >
                 <ItemTooltip item={item} />
-
-                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-contain pointer-events-none drop-shadow relative z-10" />
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  className="w-full h-full object-contain pointer-events-none drop-shadow relative z-10"
+                />
 
                 {item.id === "espada-celestial" && (
                   <div className="absolute bottom-1.5 left-2 right-2 h-2 bg-black/80 rounded-full overflow-hidden border border-purple-400/50 z-20 shadow">
@@ -1304,7 +1650,10 @@ function BattleScreen({
                   <Trophy size={32} />
                 </div>
                 <h2 className="text-2xl font-black text-white mb-1">VITÓRIA NO NEXUS!</h2>
-                <p className="text-sm text-slate-300 mb-4">Você derrotou o Guardião Oni e avançou de nível!</p>
+                <p className="text-sm text-slate-300 mb-2">Você derrotou o Guardião Oni e avançou na trilha!</p>
+                <div className="bg-red-950/80 border border-red-500/60 rounded-xl px-4 py-1.5 text-red-200 font-bold text-xs mb-3 flex items-center gap-2">
+                  <span>🔥</span> Relíquia Coletada: [Lágrima de Fogo do Oni]
+                </div>
                 <div className="bg-amber-950/60 border border-amber-500/50 rounded-xl px-4 py-2 text-amber-300 font-black text-sm mb-6 flex items-center gap-2">
                   <Coins size={18} /> +100 Ouro Obtido!
                 </div>
@@ -1312,7 +1661,7 @@ function BattleScreen({
                   onClick={onBackToMenu}
                   className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm uppercase shadow-lg transition-all"
                 >
-                  CONTINUAR NO MENU
+                  VOLTAR AO MAPA DE JORNADA
                 </button>
               </>
             ) : (
