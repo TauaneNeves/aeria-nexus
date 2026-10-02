@@ -19,9 +19,9 @@ import {
   DollarSign,
   X,
   Compass,
-  Gift,
   Sparkles,
   MapPin,
+  Swords,
 } from "lucide-react";
 import { PlasmaProjectile } from "./components/PlasmaProjectile";
 
@@ -52,6 +52,66 @@ export interface PlacedItem extends ItemData {
   x: number;
   y: number;
 }
+
+interface BossConfig {
+  phase: number;
+  name: string;
+  title: string;
+  islandImg: string;
+  avatarImg: string;
+  maxHp: number;
+  maxShield: number;
+  damage: number;
+  cooldown: number;
+  goldReward: number;
+  relicReward: string;
+  relicIcon: string;
+}
+
+const BOSS_PHASES: Record<number, BossConfig> = {
+  1: {
+    phase: 1,
+    name: "Guardião Oni",
+    title: "Templo das Brasas",
+    islandImg: "/ilha1.png",
+    avatarImg: "/chefe.png",
+    maxHp: 220,
+    maxShield: 60,
+    damage: 12,
+    cooldown: 3.8,
+    goldReward: 100,
+    relicReward: "Lágrima de Fogo do Oni",
+    relicIcon: "🔥",
+  },
+  2: {
+    phase: 2,
+    name: "Rainha Colmeia",
+    title: "Cânion do Vazio",
+    islandImg: "/ilha2.png",
+    avatarImg: "/chefe.png",
+    maxHp: 340,
+    maxShield: 120,
+    damage: 17,
+    cooldown: 3.4,
+    goldReward: 150,
+    relicReward: "Orbe de Éter",
+    relicIcon: "🔮",
+  },
+  3: {
+    phase: 3,
+    name: "Arquilorde Celestial",
+    title: "Cidadela Cósmica",
+    islandImg: "/ilha3.png",
+    avatarImg: "/chefe.png",
+    maxHp: 480,
+    maxShield: 180,
+    damage: 22,
+    cooldown: 3.0,
+    goldReward: 250,
+    relicReward: "Fragmento Celestial",
+    relicIcon: "💎",
+  },
+};
 
 const SHOP_CATALOG: ItemData[] = [
   {
@@ -123,6 +183,7 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
   const [gold, setGold] = useState<number>(150);
   const [unlockedProgress, setUnlockedProgress] = useState<number>(1);
+  const [currentBossPhase, setCurrentBossPhase] = useState<number>(1);
 
   const [collectedRelics, setCollectedRelics] = useState<string[]>([]);
   const [normalInventory, setNormalInventory] = useState<PlacedItem[]>([]);
@@ -200,7 +261,6 @@ export default function App() {
     }
   };
 
-  // Posiciona o item no slot exato solto pelo jogador
   const moveOrPlaceItem = (
     item: PlacedItem,
     source: "normal" | "battle",
@@ -317,30 +377,22 @@ export default function App() {
     setNormalInventory((prev) => [...prev, { ...item, x: placedX, y: placedY }]);
   };
 
+  const handleStartBattle = (phase: number) => {
+    setCurrentBossPhase(phase);
+    setCurrentScreen("BATTLE");
+  };
+
   const handleVictory = useCallback(() => {
-    setGold((prev) => prev + 100);
-    setUnlockedProgress((prev) => Math.max(prev, 2));
+    const boss = BOSS_PHASES[currentBossPhase] || BOSS_PHASES[1];
+    setGold((prev) => prev + boss.goldReward);
+    setUnlockedProgress((prev) => Math.max(prev, currentBossPhase + 1));
     setCollectedRelics((prev) => {
-      if (!prev.includes("Lágrima de Fogo do Oni")) {
-        return [...prev, "Lágrima de Fogo do Oni"];
+      if (!prev.includes(boss.relicReward)) {
+        return [...prev, boss.relicReward];
       }
       return prev;
     });
-  }, []);
-
-  const handleClaimChest = () => {
-    if (unlockedProgress === 2) {
-      setGold((prev) => prev + 50);
-      setUnlockedProgress(3);
-      setCollectedRelics((prev) => {
-        if (!prev.includes("Fragmento Celestial")) {
-          return [...prev, "Fragmento Celestial"];
-        }
-        return prev;
-      });
-      alert("Baú da Jornada Aberto! +50 de Ouro e Relíquia [Fragmento Celestial] colecionada!");
-    }
-  };
+  }, [currentBossPhase]);
 
   return (
     <main className="min-h-screen text-slate-100 flex flex-col font-sans select-none">
@@ -399,6 +451,52 @@ export default function App() {
           }
         }
 
+        @keyframes floatIsland1 {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+        }
+
+        @keyframes floatIsland2 {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-14px); }
+        }
+
+        @keyframes floatIsland3 {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+
+        /* Animação do fluxo contínuo de energia da estrada */
+        @keyframes energyTrailFlow {
+          0% { stroke-dashoffset: 48; }
+          100% { stroke-dashoffset: 0; }
+        }
+
+        @keyframes portalPulse {
+          0%, 100% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.2); opacity: 1; filter: drop-shadow(0 0 8px #22d3ee); }
+        }
+
+        .animate-float-1 {
+          animation: floatIsland1 5s ease-in-out infinite;
+        }
+
+        .animate-float-2 {
+          animation: floatIsland2 6.5s ease-in-out infinite 0.8s;
+        }
+
+        .animate-float-3 {
+          animation: floatIsland3 5.8s ease-in-out infinite 1.6s;
+        }
+
+        .animate-energy-flow {
+          animation: energyTrailFlow 1.6s linear infinite;
+        }
+
+        .animate-portal {
+          animation: portalPulse 3s ease-in-out infinite;
+        }
+
         .animate-projectile-right {
           animation: projectileFlyRight var(--fly-time, 0.7s) cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
@@ -438,8 +536,7 @@ export default function App() {
           gold={gold}
           unlockedProgress={unlockedProgress}
           collectedRelics={collectedRelics}
-          onStartBoss={() => setCurrentScreen("BATTLE")}
-          onClaimChest={handleClaimChest}
+          onStartBoss={handleStartBattle}
           onOpenPrep={() => setCurrentScreen("INVENTORY_PREP")}
           onBack={() => setCurrentScreen("HOME")}
         />
@@ -455,13 +552,14 @@ export default function App() {
           onMoveOrPlaceItem={moveOrPlaceItem}
           onEquipItem={equipToBattle}
           onUnequipItem={unequipToNormal}
-          onGoToBattle={() => setCurrentScreen("BATTLE")}
+          onGoToBattle={() => handleStartBattle(Math.min(unlockedProgress, 3))}
           onBack={() => setCurrentScreen("MAP")}
         />
       )}
 
       {currentScreen === "BATTLE" && (
         <BattleScreen
+          bossConfig={BOSS_PHASES[currentBossPhase] || BOSS_PHASES[1]}
           playerItems={playerBattleItems}
           bossItems={bossItems}
           onVictory={handleVictory}
@@ -562,22 +660,20 @@ function HomeScreen({
 }
 
 /* ========================================================
-   TELA DE WORLD MAP
+   TELA DE WORLD MAP (BRILHO ORGÂNICO VAZANDO PELA SILHUETA)
    ======================================================== */
 function WorldMapScreen({
   gold,
   unlockedProgress,
   collectedRelics,
   onStartBoss,
-  onClaimChest,
   onOpenPrep,
   onBack,
 }: {
   gold: number;
   unlockedProgress: number;
   collectedRelics: string[];
-  onStartBoss: () => void;
-  onClaimChest: () => void;
+  onStartBoss: (phase: number) => void;
   onOpenPrep: () => void;
   onBack: () => void;
 }) {
@@ -597,39 +693,44 @@ function WorldMapScreen({
           </div>
         </div>
 
+        {/* RELÍQUIAS */}
         <div className="flex items-center gap-3 bg-[#0f1726]/90 border border-cyan-500/30 rounded-xl px-4 py-2 shadow-lg backdrop-blur-sm">
           <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
             <Sparkles size={14} className="text-amber-400" />
-            Coleção de Relíquias:
+            Relíquias Coletadas:
           </span>
           <div className="flex items-center gap-2">
             <div
-              title={collectedRelics.includes("Lágrima de Fogo do Oni") ? "Lágrima de Fogo do Oni (Coletada)" : "Espaço Vazio"}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center text-xs transition-all ${
+              title={collectedRelics.includes("Lágrima de Fogo do Oni") ? "Lágrima de Fogo do Oni (Fase 1)" : "Fase 1 (Pendente)"}
+              className={`w-8 h-8 rounded-lg border flex items-center justify-center text-sm transition-all ${
                 collectedRelics.includes("Lágrima de Fogo do Oni")
-                  ? "bg-red-950/80 border-red-500 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
-                  : "bg-slate-900/80 border-slate-800 text-slate-600"
+                  ? "bg-red-950/80 border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.6)]"
+                  : "bg-slate-900/80 border-slate-800 opacity-40 grayscale"
               }`}
             >
               🔥
             </div>
 
             <div
-              title={collectedRelics.includes("Fragmento Celestial") ? "Fragmento Celestial (Coletado)" : "Espaço Vazio"}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center text-xs transition-all ${
-                collectedRelics.includes("Fragmento Celestial")
-                  ? "bg-amber-950/80 border-amber-500 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.5)]"
-                  : "bg-slate-900/80 border-slate-800 text-slate-600"
+              title={collectedRelics.includes("Orbe de Éter") ? "Orbe de Éter (Fase 2)" : "Fase 2 (Pendente)"}
+              className={`w-8 h-8 rounded-lg border flex items-center justify-center text-sm transition-all ${
+                collectedRelics.includes("Orbe de Éter")
+                  ? "bg-purple-950/80 border-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.6)]"
+                  : "bg-slate-900/80 border-slate-800 opacity-40 grayscale"
               }`}
             >
-              💎
+              🔮
             </div>
 
             <div
-              title="Orbe de Éter (Bloqueado)"
-              className="w-7 h-7 rounded-lg border bg-slate-900/80 border-slate-800 text-slate-600 flex items-center justify-center text-xs"
+              title={collectedRelics.includes("Fragmento Celestial") ? "Fragmento Celestial (Fase 3)" : "Fase 3 (Pendente)"}
+              className={`w-8 h-8 rounded-lg border flex items-center justify-center text-sm transition-all ${
+                collectedRelics.includes("Fragmento Celestial")
+                  ? "bg-amber-950/80 border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.6)]"
+                  : "bg-slate-900/80 border-slate-800 opacity-40 grayscale"
+              }`}
             >
-              🔒
+              💎
             </div>
           </div>
         </div>
@@ -648,145 +749,240 @@ function WorldMapScreen({
         </div>
       </header>
 
-      <section className="relative w-full max-w-6xl mx-auto flex-1 my-4 bg-gradient-to-b from-[#101b2b] via-[#0d1624] to-[#070b12] border-2 border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none opacity-30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyan-900/30 via-slate-950 to-black" />
+      {/* CONTAINER DO MAPA */}
+      <section
+        className="relative w-full max-w-6xl mx-auto flex-1 my-4 border-2 border-cyan-500/30 rounded-3xl p-6 shadow-2xl flex flex-col justify-between overflow-hidden bg-cover bg-center"
+        style={{
+          backgroundImage: "url('/backgound.png'), url('/background.png'), linear-gradient(to bottom, #09121d, #040810)",
+        }}
+      >
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/60 via-transparent to-black/30" />
 
-        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+        {/* ROTA CELESTIAL DE NAVEGAÇÃO COM PONTOS ESPAÇADOS */}
+        <svg
+          viewBox="0 0 1000 600"
+          className="absolute inset-0 w-full h-full pointer-events-none z-10"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="celestialGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.4" />
+              <stop offset="50%" stopColor="#a855f7" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.4" />
+            </linearGradient>
+          </defs>
+
           <path
-            d="M 120 400 Q 250 480 380 320 T 640 240 T 880 140"
+            d="M 160 490 C 280 470, 360 360, 500 350 C 640 340, 720 220, 830 180"
             fill="none"
-            stroke="#1e2d42"
-            strokeWidth="16"
-            strokeLinecap="round"
+            stroke="url(#celestialGrad)"
+            strokeWidth="1.5"
+            strokeDasharray="4 8"
+            opacity="0.3"
           />
-          <path
-            d="M 120 400 Q 250 480 380 320 T 640 240 T 880 140"
-            fill="none"
-            stroke="#00f0ff"
-            strokeWidth="4"
-            strokeDasharray="8 6"
-            className="opacity-70 animate-pulse"
-          />
+
+          <circle cx="244" cy="461" r="3.5" fill={unlockedProgress >= 2 ? "#38bdf8" : "rgba(255,255,255,0.7)"} opacity="0.8" />
+          <circle cx="322" cy="416" r="3.5" fill={unlockedProgress >= 2 ? "#38bdf8" : "rgba(255,255,255,0.5)"} opacity="0.7" />
+          <circle cx="405" cy="373" r="3.5" fill={unlockedProgress >= 2 ? "#38bdf8" : "rgba(148,163,184,0.4)"} opacity="0.5" />
+
+          <circle cx="595" cy="325" r="3.5" fill={unlockedProgress >= 3 ? "#38bdf8" : "rgba(148,163,184,0.3)"} opacity="0.5" />
+          <circle cx="676" cy="276" r="3.5" fill={unlockedProgress >= 3 ? "#38bdf8" : "rgba(148,163,184,0.3)"} opacity="0.5" />
+          <circle cx="752" cy="222" r="3.5" fill={unlockedProgress >= 3 ? "#38bdf8" : "rgba(148,163,184,0.3)"} opacity="0.5" />
         </svg>
 
-        <div className="relative z-20 w-full h-full min-h-[480px]">
-          {/* NÓ 1: TEMPLO DO ONI */}
-          <div className="absolute left-[8%] bottom-[12%] flex flex-col items-center">
-            {unlockedProgress === 1 && (
-              <div className="absolute -top-16 flex flex-col items-center animate-bounce z-30">
-                <span className="text-[10px] font-black text-cyan-300 bg-black/80 px-2 py-0.5 rounded-full border border-cyan-400">
-                  VOCÊ ESTÁ AQUI
-                </span>
-                <div className="w-8 h-8 rounded-full border-2 border-cyan-400 shadow-[0_0_15px_#22d3ee] overflow-hidden bg-slate-900 mt-1">
-                  <img src="/jogador.png" alt="Jogador" className="w-full h-full object-contain" />
-                </div>
-              </div>
-            )}
-
+        <div className="relative z-20 w-full h-full min-h-[520px]">
+          {/* ILHA 1: TEMPLO DO ONI (FASE 1) */}
+          <div className="absolute left-[5%] bottom-[4%] flex flex-col items-center">
             <button
-              onClick={onStartBoss}
-              className="group relative w-24 h-24 rounded-2xl bg-gradient-to-b from-[#3a1520] to-[#1c080e] border-4 border-red-500 hover:border-red-400 shadow-[0_0_25px_rgba(239,68,68,0.5)] p-2 flex flex-col items-center justify-between transition-all hover:scale-110 cursor-pointer"
+              onClick={() => onStartBoss(1)}
+              className="group relative flex flex-col items-center transition-all cursor-pointer hover:scale-105 active:scale-95"
             >
-              <span className="text-[9px] font-black tracking-wider text-red-300 uppercase">
-                FASE 1
-              </span>
-              <img src="/chefe.png" alt="Oni" className="h-12 object-contain drop-shadow" />
-              <span className="text-[10px] font-black text-white">Guardião Oni</span>
+              {/* Luz difusa suave no fundo (sem anéis ou bordas circulares) */}
+              {unlockedProgress === 1 && (
+                <div className="absolute -inset-10 bg-cyan-400/20 blur-[70px] pointer-events-none" />
+              )}
+
+              <div className="w-48 h-48 md:w-56 md:h-56 relative animate-float-1 transition-all">
+                <img
+                  src="/ilha1.png"
+                  alt="Ilha 1 - Templo Oni"
+                  className="w-full h-full object-contain group-hover:brightness-110 transition-all"
+                  style={{
+                    filter:
+                      unlockedProgress === 1
+                        ? "drop-shadow(0 0 15px rgba(34, 211, 238, 0.95)) drop-shadow(0 0 35px rgba(34, 211, 238, 0.7)) drop-shadow(0 0 65px rgba(6, 182, 212, 0.45))"
+                        : "drop-shadow(0 15px 30px rgba(0,0,0,0.9))",
+                  }}
+                />
+              </div>
+
+              <div
+                className={`bg-[#13070a]/90 backdrop-blur-md border-2 rounded-xl px-3 py-1.5 flex flex-col items-center -mt-6 transition-all ${
+                  unlockedProgress === 1
+                    ? "border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+                    : "border-red-500/80 shadow-[0_0_20px_rgba(239,68,68,0.5)]"
+                }`}
+              >
+                <span className="text-[9px] font-black tracking-widest text-red-400 uppercase">
+                  FASE 1
+                </span>
+                <span className="text-xs font-black text-white flex items-center gap-1">
+                  <Swords size={12} className="text-red-400" /> Guardião Oni
+                </span>
+                <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+                  <CheckCircle2 size={11} /> Desbloqueado
+                </span>
+              </div>
             </button>
-            <span className="text-[11px] font-bold text-emerald-400 mt-2 flex items-center gap-1 bg-black/70 px-2 py-0.5 rounded-md">
-              <CheckCircle2 size={12} /> Desbloqueado
-            </span>
           </div>
 
-          {/* NÓ 2: BAÚ */}
-          <div className="absolute left-[34%] bottom-[38%] flex flex-col items-center">
-            {unlockedProgress === 2 && (
-              <div className="absolute -top-14 flex flex-col items-center animate-bounce z-30">
-                <span className="text-[10px] font-black text-amber-300 bg-black/80 px-2 py-0.5 rounded-full border border-amber-400">
-                  ABRIR BAÚ
-                </span>
-              </div>
-            )}
-
+          {/* ILHA 2: CÂNION DA COLMEIA (FASE 2) */}
+          <div className="absolute left-[40%] top-[25%] flex flex-col items-center">
             <button
-              onClick={onClaimChest}
+              onClick={() => unlockedProgress >= 2 && onStartBoss(2)}
               disabled={unlockedProgress < 2}
-              className={`relative w-16 h-16 rounded-xl border-3 flex flex-col items-center justify-center transition-all ${
+              className={`group relative flex flex-col items-center transition-all ${
                 unlockedProgress >= 2
-                  ? "bg-amber-950/80 border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.5)] cursor-pointer hover:scale-110 animate-pulse"
-                  : "bg-slate-900/80 border-slate-800 text-slate-600 cursor-not-allowed"
+                  ? "cursor-pointer hover:scale-105 active:scale-95"
+                  : "cursor-not-allowed opacity-75"
               }`}
             >
-              <Gift size={24} />
-              <span className="text-[8px] font-black mt-1">BAÚ</span>
-            </button>
-            <span className="text-[10px] font-semibold text-slate-400 mt-1">
-              {unlockedProgress >= 2 ? "Clique para Coletar!" : "Recompensa Nível 1"}
-            </span>
-          </div>
+              {unlockedProgress === 2 && (
+                <div className="absolute -inset-10 bg-cyan-400/20 blur-[70px] pointer-events-none" />
+              )}
 
-          {/* NÓ 3: RAINHA COLMEIA */}
-          <div className="absolute left-[58%] top-[32%] flex flex-col items-center">
-            {unlockedProgress === 3 && (
-              <div className="absolute -top-16 flex flex-col items-center animate-bounce z-30">
-                <span className="text-[10px] font-black text-cyan-300 bg-black/80 px-2 py-0.5 rounded-full border border-cyan-400">
-                  VOCÊ ESTÁ AQUI
+              <div className="w-48 h-48 md:w-56 md:h-56 relative animate-float-2 transition-all">
+                <img
+                  src="/ilha2.png"
+                  alt="Ilha 2 - Cânion da Colmeia"
+                  className={`w-full h-full object-contain transition-all ${
+                    unlockedProgress >= 2
+                      ? "group-hover:brightness-110"
+                      : "grayscale-[40%] brightness-75"
+                  }`}
+                  style={{
+                    filter:
+                      unlockedProgress === 2
+                        ? "drop-shadow(0 0 15px rgba(34, 211, 238, 0.95)) drop-shadow(0 0 35px rgba(34, 211, 238, 0.7)) drop-shadow(0 0 65px rgba(6, 182, 212, 0.45))"
+                        : unlockedProgress >= 2
+                        ? "drop-shadow(0 0 20px rgba(168,85,247,0.4))"
+                        : "drop-shadow(0 15px 30px rgba(0,0,0,0.9))",
+                  }}
+                />
+              </div>
+
+              <div
+                className={`backdrop-blur-md border-2 rounded-xl px-3 py-1.5 flex flex-col items-center -mt-6 shadow-xl transition-all ${
+                  unlockedProgress === 2
+                    ? "bg-[#180a24]/90 border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+                    : unlockedProgress >= 2
+                    ? "bg-[#180a24]/90 border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.5)]"
+                    : "bg-[#0f141f]/90 border-slate-700 text-slate-500"
+                }`}
+              >
+                <span className="text-[9px] font-black tracking-widest text-purple-300 uppercase">
+                  FASE 2
                 </span>
-                <div className="w-8 h-8 rounded-full border-2 border-cyan-400 shadow-[0_0_15px_#22d3ee] overflow-hidden bg-slate-900 mt-1">
-                  <img src="/jogador.png" alt="Jogador" className="w-full h-full object-contain" />
-                </div>
+                <span className="text-xs font-black text-white flex items-center gap-1">
+                  <Swords size={12} className="text-purple-400" /> Rainha Colmeia
+                </span>
+                <span className="text-[10px] font-bold mt-0.5">
+                  {unlockedProgress >= 2 ? (
+                    <span className="text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 size={11} /> Desbloqueado
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <Lock size={11} /> Bloqueado
+                    </span>
+                  )}
+                </span>
               </div>
-            )}
-
-            <div
-              className={`relative w-22 h-22 rounded-2xl border-4 flex flex-col items-center justify-between p-2 shadow-xl transition-all ${
-                unlockedProgress >= 3
-                  ? "bg-gradient-to-b from-[#2b103c] to-[#14061d] border-purple-500 cursor-pointer hover:scale-110 shadow-[0_0_25px_rgba(168,85,247,0.5)]"
-                  : "bg-[#111722]/80 border-slate-800 opacity-60 cursor-not-allowed"
-              }`}
-            >
-              <span className="text-[9px] font-black tracking-wider text-purple-300 uppercase">
-                FASE 2
-              </span>
-              <div className="h-10 flex items-center justify-center">
-                {unlockedProgress >= 3 ? <Sparkles size={28} className="text-purple-400" /> : <Lock size={24} className="text-slate-600" />}
-              </div>
-              <span className="text-[10px] font-bold text-slate-300">Rainha Colmeia</span>
-            </div>
-            <span className="text-[10px] text-slate-500 mt-1.5">
-              {unlockedProgress >= 3 ? "Pronto para o Combate" : "Bloqueado"}
-            </span>
+            </button>
           </div>
 
-          {/* NÓ 4: ARQUILORDE */}
-          <div className="absolute right-[8%] top-[10%] flex flex-col items-center">
-            <div className="opacity-50 relative w-24 h-24 rounded-2xl bg-[#0e141f] border-4 border-slate-800 p-2 flex flex-col items-center justify-between shadow cursor-not-allowed">
-              <span className="text-[9px] font-black tracking-wider text-slate-500 uppercase">
-                CHEFE FINAL
-              </span>
-              <Lock size={28} className="text-slate-600 my-auto" />
-              <span className="text-[10px] font-bold text-slate-500">Arquilorde</span>
-            </div>
-            <span className="text-[10px] text-slate-600 mt-1">Nível 3 (Bloqueado)</span>
+          {/* ILHA 3: CIDADELA CÓSMICA (FASE 3) */}
+          <div className="absolute right-[5%] top-[5%] flex flex-col items-center">
+            <button
+              onClick={() => unlockedProgress >= 3 && onStartBoss(3)}
+              disabled={unlockedProgress < 3}
+              className={`group relative flex flex-col items-center transition-all ${
+                unlockedProgress >= 3
+                  ? "cursor-pointer hover:scale-105 active:scale-95"
+                  : "cursor-not-allowed opacity-75"
+              }`}
+            >
+              {unlockedProgress === 3 && (
+                <div className="absolute -inset-10 bg-cyan-400/20 blur-[70px] pointer-events-none" />
+              )}
+
+              <div className="w-56 h-56 md:w-64 md:h-64 relative animate-float-3 transition-all">
+                <img
+                  src="/ilha3.png"
+                  alt="Ilha 3 - Cidadela Cósmica"
+                  className={`w-full h-full object-contain transition-all ${
+                    unlockedProgress >= 3
+                      ? "group-hover:brightness-110"
+                      : "grayscale-[50%] brightness-75"
+                  }`}
+                  style={{
+                    filter:
+                      unlockedProgress === 3
+                        ? "drop-shadow(0 0 15px rgba(34, 211, 238, 0.95)) drop-shadow(0 0 35px rgba(34, 211, 238, 0.7)) drop-shadow(0 0 65px rgba(6, 182, 212, 0.45))"
+                        : unlockedProgress >= 3
+                        ? "drop-shadow(0 0 25px rgba(245,158,11,0.5))"
+                        : "drop-shadow(0 20px 40px rgba(0,0,0,0.9))",
+                  }}
+                />
+              </div>
+
+              <div
+                className={`backdrop-blur-md border-2 rounded-xl px-3 py-1.5 flex flex-col items-center -mt-6 shadow-xl transition-all ${
+                  unlockedProgress === 3
+                    ? "bg-[#241708]/90 border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)]"
+                    : unlockedProgress >= 3
+                    ? "bg-[#241708]/90 border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.6)]"
+                    : "bg-[#0f141f]/90 border-slate-700 text-slate-500"
+                }`}
+              >
+                <span className="text-[9px] font-black tracking-widest text-amber-400 uppercase">
+                  CHEFE FINAL
+                </span>
+                <span className="text-xs font-black text-white flex items-center gap-1">
+                  <Trophy size={12} className="text-amber-400" /> Arquilorde
+                </span>
+                <span className="text-[10px] font-bold mt-0.5">
+                  {unlockedProgress >= 3 ? (
+                    <span className="text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 size={11} /> Desbloqueado
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 flex items-center gap-1">
+                      <Lock size={11} /> Bloqueado
+                    </span>
+                  )}
+                </span>
+              </div>
+            </button>
           </div>
         </div>
 
-        <div className="relative z-20 flex justify-between items-center text-xs text-slate-400 pt-3 border-t border-slate-800">
+        {/* RODAPÉ DO MAPA */}
+        <div className="relative z-20 flex justify-between items-center text-xs text-slate-300 pt-3 border-t border-cyan-500/20 bg-black/40 px-3 py-1.5 rounded-lg backdrop-blur-sm">
           <span className="flex items-center gap-1.5">
             <MapPin size={14} className="text-cyan-400" />
-            Percorra a estrada celestial: vença o Guardião para abrir o baú e avançar para a Fase 2.
+            Vença o Guardião de cada ilha para coletar sua relíquia e abrir o caminho para a próxima fase.
           </span>
           <span className="font-bold text-cyan-400">Aeria Nexus World Map</span>
         </div>
       </section>
 
       <footer className="text-center text-xs text-slate-500 py-2">
-        Aeria Nexus © 2026 — Mapa de Jornada e Progressão
+        Aeria Nexus © 2026 — Trilha de Batalhas e Ilhas Flutuantes
       </footer>
     </div>
   );
 }
-
 /* ========================================================
    TELA DE LOGIN
    ======================================================== */
@@ -1231,15 +1427,17 @@ function InventoryPrepScreen({
 }
 
 /* ========================================================
-   TELA DA ARENA (COM OVERLAY INTERNO NO SLOT)
+   TELA DA ARENA (VALORES AO LADO DAS BARRAS & SEM TEXTO DE DANO)
    ======================================================== */
 function BattleScreen({
+  bossConfig,
   playerItems,
   bossItems,
   onVictory,
   onGiveUp,
   onBackToMenu,
 }: {
+  bossConfig: BossConfig;
   playerItems: PlacedItem[];
   bossItems: PlacedItem[];
   onVictory: () => void;
@@ -1258,10 +1456,10 @@ function BattleScreen({
   const playerDamage = weaponsDamage > 0 ? weaponsDamage : (playerItems.length > 0 ? 8 : 4);
   const playerCooldown = playerSword?.cooldown || 3.0;
 
-  const maxBossHp = 220;
-  const maxBossShield = 60;
-  const bossDamage = 12;
-  const bossCooldown = 3.8;
+  const maxBossHp = bossConfig.maxHp;
+  const maxBossShield = bossConfig.maxShield;
+  const bossDamage = bossConfig.damage;
+  const bossCooldown = bossConfig.cooldown;
 
   const [playerHp, setPlayerHp] = useState<number>(maxPlayerHp);
   const [playerShield, setPlayerShield] = useState<number>(maxPlayerShield);
@@ -1279,11 +1477,9 @@ function BattleScreen({
 
   const [speedMultiplier, setSpeedMultiplier] = useState<1 | 2>(1);
   const [combatStatus, setCombatStatus] = useState<"FIGHTING" | "VICTORY" | "DEFEAT">("FIGHTING");
-  const [floatingDamage, setFloatingDamage] = useState<{ text: string; color: string } | null>(null);
   const [bossFrozenTimer, setBossFrozenTimer] = useState<number>(0);
 
   const projectileFlightTime = speedMultiplier === 1 ? 700 : 350;
-
   const victoryReportedRef = useRef(false);
 
   useEffect(() => {
@@ -1337,11 +1533,6 @@ function BattleScreen({
                 });
               }
               return newShield;
-            });
-
-            setFloatingDamage({
-              text: willFreeze ? `-${playerDamage} (❄️ CONGELADO!)` : `-${playerDamage} Dano`,
-              color: willFreeze ? "text-cyan-300" : "text-red-500",
             });
 
             setPlayerShooting(false);
@@ -1425,62 +1616,82 @@ function BattleScreen({
         backgroundImage: "url('/cenario.jpg'), linear-gradient(to bottom, #3a6b8c, #5484a6, #7aa9c8)",
       }}
     >
-      {/* 1. HUD SUPERIOR */}
+      {/* 1. HUD SUPERIOR COM VALORES AO LADO DE CADA BARRA */}
       <header className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 items-center gap-4 relative z-10">
+        {/* JOGADOR (ESQUERDA) */}
         <div className="w-full max-w-[420px] flex flex-col gap-1.5">
-          <div className="flex justify-between text-sm font-bold text-white drop-shadow">
-            <span>JOGADOR 1 (Você)</span>
-            <span className="text-xs">
-              {playerHp} / {maxPlayerHp} HP {maxPlayerShield > 0 && `(+${playerShield} Escudo)`}
+          <div className="text-sm font-bold text-white drop-shadow">
+            JOGADOR 1 (Você)
+          </div>
+          {/* Linha de Vida */}
+          <div className="flex items-center gap-2.5">
+            <div className="h-6 flex-1 bg-[#171c26]/90 border-2 border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
+              <Heart size={14} className="text-red-500 fill-red-500 absolute left-1.5 z-10" />
+              <div className="h-full bg-red-600 transition-all duration-150" style={{ width: `${(playerHp / maxPlayerHp) * 100}%` }} />
+            </div>
+            <span className="text-xs font-bold text-red-400 font-mono min-w-[70px] text-right">
+              {playerHp}/{maxPlayerHp} HP
             </span>
           </div>
-          <div className="h-6 w-full bg-[#171c26]/90 border-2 border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
-            <Heart size={14} className="text-red-500 fill-red-500 absolute left-1.5 z-10" />
-            <div className="h-full bg-red-600 transition-all duration-150" style={{ width: `${(playerHp / maxPlayerHp) * 100}%` }} />
-          </div>
-          <div className="h-4 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
-            <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1.5 z-10" />
-            <div
-              className="h-full bg-sky-500 transition-all duration-150"
-              style={{ width: `${maxPlayerShield > 0 ? (playerShield / maxPlayerShield) * 100 : 0}%` }}
-            />
+          {/* Linha de Armadura/Escudo */}
+          <div className="flex items-center gap-2.5">
+            <div className="h-4 flex-1 bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
+              <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1.5 z-10" />
+              <div
+                className="h-full bg-sky-500 transition-all duration-150"
+                style={{ width: `${maxPlayerShield > 0 ? (playerShield / maxPlayerShield) * 100 : 0}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold text-sky-400 font-mono min-w-[70px] text-right">
+              {playerShield}/{maxPlayerShield} Esc
+            </span>
           </div>
         </div>
 
+        {/* FASE CENTRAL */}
         <div className="flex flex-col items-center">
           <div className="w-14 h-14 rounded-full bg-[#271f1a] border-2 border-[#544337] flex flex-col items-center justify-center shadow-2xl">
-            <span className="text-[9px] font-black text-amber-400 uppercase">ROUND</span>
-            <span className="text-xl font-black text-white leading-none">1</span>
+            <span className="text-[9px] font-black text-amber-400 uppercase">FASE</span>
+            <span className="text-xl font-black text-white leading-none">{bossConfig.phase}</span>
           </div>
           <span className="text-[10px] text-emerald-300 font-bold mt-1 bg-black/60 px-2 py-0.5 rounded animate-pulse">
             CARREGANDO GOLPES
           </span>
         </div>
 
+        {/* CHEFE (DIREITA) */}
         <div className="w-full max-w-[420px] md:ml-auto flex flex-col gap-1.5">
-          <div className="flex justify-between text-sm font-bold text-white drop-shadow">
-            <span>CHEFE (Guardião Oni)</span>
-            <span className="text-xs">
-              {bossHp} / {maxBossHp} HP {maxBossShield > 0 && `(+${bossShield} Escudo)`}
+          <div className="text-sm font-bold text-white drop-shadow text-right">
+            CHEFE ({bossConfig.name})
+          </div>
+          {/* Linha de Vida */}
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-bold text-red-400 font-mono min-w-[70px] text-left">
+              {bossHp}/{maxBossHp} HP
             </span>
+            <div className="h-6 flex-1 bg-[#171c26]/90 border-2 border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
+              <Heart size={14} className="text-red-500 fill-red-500 absolute right-1.5 z-10" />
+              <div className="h-full bg-red-600 transition-all duration-150 ml-auto" style={{ width: `${(bossHp / maxBossHp) * 100}%` }} />
+            </div>
           </div>
-          <div className="h-6 w-full bg-[#171c26]/90 border-2 border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
-            <Heart size={14} className="text-red-500 fill-red-500 absolute left-1.5 z-10" />
-            <div className="h-full bg-red-600 transition-all duration-150 ml-auto" style={{ width: `${(bossHp / maxBossHp) * 100}%` }} />
-          </div>
-          <div className="h-4 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
-            <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1.5 z-10" />
-            <div
-              className="h-full bg-sky-500 transition-all duration-150 ml-auto"
-              style={{ width: `${maxBossShield > 0 ? (bossShield / maxBossShield) * 100 : 0}%` }}
-            />
+          {/* Linha de Armadura/Escudo */}
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-bold text-sky-400 font-mono min-w-[70px] text-left">
+              {bossShield}/{maxBossShield} Esc
+            </span>
+            <div className="h-4 flex-1 bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
+              <Shield size={12} className="text-sky-400 fill-sky-400 absolute right-1.5 z-10" />
+              <div
+                className="h-full bg-sky-500 transition-all duration-150 ml-auto"
+                style={{ width: `${maxBossShield > 0 ? (bossShield / maxBossShield) * 100 : 0}%` }}
+              />
+            </div>
           </div>
         </div>
       </header>
 
-      {/* 2. PERSONAGENS E ARENA */}
+      {/* 2. PERSONAGENS E ARENA (SEM TEXTO FLUTUANTE DE DANO) */}
       <section className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 items-end my-1 h-52 md:h-64 pointer-events-none relative z-10">
-        {/* PROJÉTIL DO JOGADOR */}
         {playerShooting && (
           <div
             className="absolute top-1/2 -translate-y-1/2 z-30 animate-projectile-right pointer-events-none"
@@ -1490,7 +1701,6 @@ function BattleScreen({
           </div>
         )}
 
-        {/* PROJÉTIL DO CHEFE */}
         {bossShooting && (
           <div
             className="absolute top-1/2 -translate-y-1/2 z-30 animate-projectile-left pointer-events-none"
@@ -1500,7 +1710,6 @@ function BattleScreen({
           </div>
         )}
 
-        {/* JOGADOR */}
         <div className="w-full max-w-[420px] flex justify-center">
           <img
             src="/jogador.png"
@@ -1511,20 +1720,13 @@ function BattleScreen({
           />
         </div>
 
-        {/* DANO FLUTUANTE */}
-        <div className="relative flex flex-col items-center justify-center pb-8 font-mono font-black text-center drop-shadow min-h-[80px] w-full">
-          {floatingDamage && (
-            <span className={`text-xl md:text-2xl font-black ${floatingDamage.color} animate-bounce z-40`}>
-              {floatingDamage.text}
-            </span>
-          )}
-        </div>
+        {/* Espaçador central sem texto numérico de dano */}
+        <div className="relative flex flex-col items-center justify-center min-h-[80px] w-full pointer-events-none" />
 
-        {/* CHEFE */}
         <div className="w-full max-w-[420px] md:ml-auto flex justify-center">
           <img
-            src="/chefe.png"
-            alt="Chefe"
+            src={bossConfig.avatarImg}
+            alt={bossConfig.name}
             className={`h-48 md:h-60 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)] transition-all ${
               bossFrozenTimer > 0 ? "brightness-125 hue-rotate-180 drop-shadow-[0_0_20px_#22d3ee]" : ""
             } ${bossShaking ? "animate-shake" : ""}`}
@@ -1534,7 +1736,6 @@ function BattleScreen({
 
       {/* 3. PAINÉIS DE INVENTÁRIO 5x5 */}
       <section className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 items-start relative z-10">
-        {/* INVENTÁRIO DO JOGADOR */}
         <div className="w-full max-w-[420px] aspect-square bg-[#0e1624]/90 backdrop-blur-sm border-4 border-[#1e2a3c] rounded-2xl p-2.5 shadow-2xl relative">
           <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
             {Array.from({ length: 25 }).map((_, i) => (
@@ -1572,7 +1773,6 @@ function BattleScreen({
           </div>
         </div>
 
-        {/* INVENTÁRIO DO CHEFE */}
         <div className="w-full max-w-[420px] md:ml-auto aspect-square bg-[#160c1a]/90 backdrop-blur-sm border-4 border-[#2c1533] rounded-2xl p-2.5 shadow-2xl relative">
           <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
             {Array.from({ length: 25 }).map((_, i) => (
@@ -1648,12 +1848,14 @@ function BattleScreen({
                   <Trophy size={32} />
                 </div>
                 <h2 className="text-2xl font-black text-white mb-1">VITÓRIA NO NEXUS!</h2>
-                <p className="text-sm text-slate-300 mb-2">Você derrotou o Guardião Oni e avançou na trilha!</p>
+                <p className="text-sm text-slate-300 mb-2">
+                  Você derrotou o {bossConfig.name} ({bossConfig.title})!
+                </p>
                 <div className="bg-red-950/80 border border-red-500/60 rounded-xl px-4 py-1.5 text-red-200 font-bold text-xs mb-3 flex items-center gap-2">
-                  <span>🔥</span> Relíquia Coletada: [Lágrima de Fogo do Oni]
+                  <span>{bossConfig.relicIcon}</span> Relíquia Coletada: [{bossConfig.relicReward}]
                 </div>
                 <div className="bg-amber-950/60 border border-amber-500/50 rounded-xl px-4 py-2 text-amber-300 font-black text-sm mb-6 flex items-center gap-2">
-                  <Coins size={18} /> +100 Ouro Obtido!
+                  <Coins size={18} /> +{bossConfig.goldReward} Ouro Obtido!
                 </div>
                 <button
                   onClick={onBackToMenu}
