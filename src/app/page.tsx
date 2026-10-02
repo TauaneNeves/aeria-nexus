@@ -8,13 +8,13 @@ type ScreenState = "HOME" | "LOGIN" | "BATTLE";
 interface Item {
   id: string;
   name: string;
-  width: number;       // colunas ocupadas
-  height: number;      // linhas ocupadas
+  width: number;       // colunas ocupadas (1 a 5)
+  height: number;      // linhas ocupadas (1 a 5)
   x: number;           // coluna inicial (0 a 4)
   y: number;           // linha inicial (0 a 4)
-  imageUrl: string;    // imagem da peça
-  borderColor: string; // borda do item
-  bgColor: string;     // fundo do item
+  imageUrl: string;    // caminho da imagem
+  borderColor: string;
+  bgColor: string;
 }
 
 export default function App() {
@@ -121,115 +121,81 @@ function LoginScreen({ onBack }: { onBack: () => void }) {
 }
 
 /* ========================================================
-   TELA DA ARENA (INVENTÁRIOS ESTILO TETRIS / PUZZLE)
+   TELA DA ARENA COM GRADE PERFEITAMENTE ALINHADA
    ======================================================== */
 function BattleScreen({ onBack }: { onBack: () => void }) {
-  // 1 Item inicial do Jogador (Lâmina 3x1 posicionada)
+  // Itens na mochila do Jogador (Espada 3x1 e Escudo 2x2)
   const [playerItems] = useState<Item[]>([
     {
       id: "espada-celestial",
       name: "Espada Celestial",
-      width: 3, // 3 colunas
-      height: 1, // 1 linha
-      x: 1,
-      y: 1,
-      borderColor: "border-[#38bdf8]",
-      bgColor: "bg-[#14293e]",
-      imageUrl: "https://placehold.co/240x70/14293e/38bdf8.png?text=Lâmina+Celestial",
-    },
-  ]);
-
-  // Itens do Chefe: réplica completa da segunda imagem (preenchimento 100% dos 25 blocos)
-  const [bossItems] = useState<Item[]>([
-    // 1. Glaive Vertical à esquerda (1x5)
-    {
-      id: "glaive-vert",
-      name: "Glaive",
-      width: 1,
-      height: 5,
-      x: 0,
-      y: 0,
-      borderColor: "border-[#7c3aed]",
-      bgColor: "bg-[#251036]",
-      imageUrl: "https://placehold.co/70x320/251036/c084fc.png?text=Glaive",
-    },
-    // 2. Glaive Horizontal no topo (4x1)
-    {
-      id: "glaive-horiz",
-      name: "Glaive da Noite",
-      width: 4,
+      width: 3,
       height: 1,
       x: 1,
       y: 0,
-      borderColor: "border-[#7c3aed]",
-      bgColor: "bg-[#251036]",
-      imageUrl: "https://placehold.co/280x70/251036/c084fc.png?text=Glaive+da+Noite",
+      imageUrl: "/espada.png",
+      borderColor: "border-[#38bdf8]",
+      bgColor: "bg-[#14293e]/95",
     },
-    // 3. Armadura de Chifres (2x2)
     {
-      id: "armadura-chifres",
-      name: "Armadura de Chifres",
+      id: "escudo-dragao",
+      name: "Escudo do Dragão",
       width: 2,
       height: 2,
       x: 1,
-      y: 1,
-      borderColor: "border-[#852a32]",
-      bgColor: "bg-[#331416]",
-      imageUrl: "https://placehold.co/140x140/331416/f87171.png?text=Armadura",
+      y: 2,
+      imageUrl: "/escudo.png",
+      borderColor: "border-[#22c55e]",
+      bgColor: "bg-[#0f2e1a]/95",
     },
-    // 4. Armadura Carmesim (2x2)
+  ]);
+
+  // Itens na mochila do Chefe (Armadura 2x2 e Coração 2x2)
+  const [bossItems] = useState<Item[]>([
     {
       id: "armadura-carmesim",
       name: "Armadura Carmesim",
       width: 2,
       height: 2,
-      x: 3,
-      y: 1,
-      borderColor: "border-[#852a32]",
-      bgColor: "bg-[#331416]",
-      imageUrl: "https://placehold.co/140x140/331416/f87171.png?text=Armadura+2",
+      x: 1,
+      y: 0,
+      imageUrl: "/armadura.png",
+      borderColor: "border-[#ef4444]",
+      bgColor: "bg-[#331416]/95",
     },
-    // 5. Coração Amaldiçoado (2x2)
     {
-      id: "coracao-1",
+      id: "coracao-amaldicoado",
       name: "Coração Amaldiçoado",
       width: 2,
       height: 2,
       x: 1,
-      y: 3,
-      borderColor: "border-[#7c3aed]",
-      bgColor: "bg-[#251036]",
-      imageUrl: "https://placehold.co/140x140/251036/c084fc.png?text=Coração",
-    },
-    // 6. Máscara Oni (2x2)
-    {
-      id: "coracao-2",
-      name: "Máscara Oni",
-      width: 2,
-      height: 2,
-      x: 3,
-      y: 3,
-      borderColor: "border-[#852a32]",
-      bgColor: "bg-[#331416]",
-      imageUrl: "https://placehold.co/140x140/331416/f87171.png?text=Máscara",
+      y: 2,
+      imageUrl: "/coracao.png",
+      borderColor: "border-[#8b5cf6]",
+      bgColor: "bg-[#251036]/95",
     },
   ]);
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-b from-[#3a6b8c] via-[#5484a6] to-[#7aa9c8] p-4">
+    <div
+      className="relative min-h-screen flex flex-col justify-between p-4 overflow-hidden bg-cover bg-center"
+      style={{
+        backgroundImage: "url('/cenario.jpg'), linear-gradient(to bottom, #3a6b8c, #5484a6, #7aa9c8)",
+      }}
+    >
       {/* 1. HUD SUPERIOR */}
-      <header className="max-w-6xl w-full mx-auto grid grid-cols-1 md:grid-cols-3 items-center gap-4">
+      <header className="max-w-6xl w-full mx-auto grid grid-cols-1 md:grid-cols-3 items-center gap-4 relative z-10">
         {/* Jogador */}
         <div className="flex flex-col gap-1">
-          <div className="flex justify-between text-sm font-bold text-white drop-shadow">
+          <div className="flex justify-between text-sm font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
             <span>JOGADOR 1 (Você)</span>
             <span className="text-xs">245 / 300</span>
           </div>
-          <div className="h-5 w-full bg-[#171c26] border border-slate-600 rounded-md overflow-hidden flex items-center relative">
+          <div className="h-5 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Heart size={14} className="text-red-500 fill-red-500 absolute left-1 z-10" />
             <div className="h-full bg-red-600 w-[81%]" />
           </div>
-          <div className="h-4 w-full bg-[#171c26] border border-slate-600 rounded-md overflow-hidden flex items-center relative">
+          <div className="h-4 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1 z-10" />
             <div className="h-full bg-sky-500 w-[80%]" />
           </div>
@@ -237,7 +203,7 @@ function BattleScreen({ onBack }: { onBack: () => void }) {
 
         {/* Round central */}
         <div className="flex flex-col items-center">
-          <div className="w-14 h-14 rounded-full bg-[#271f1a] border-2 border-[#544337] flex flex-col items-center justify-center shadow-lg">
+          <div className="w-14 h-14 rounded-full bg-[#271f1a] border-2 border-[#544337] flex flex-col items-center justify-center shadow-2xl">
             <span className="text-[9px] font-black text-amber-400 uppercase">ROUND</span>
             <span className="text-xl font-black text-white leading-none">5</span>
           </div>
@@ -251,103 +217,131 @@ function BattleScreen({ onBack }: { onBack: () => void }) {
 
         {/* Chefe */}
         <div className="flex flex-col gap-1">
-          <div className="flex justify-between text-sm font-bold text-white drop-shadow">
+          <div className="flex justify-between text-sm font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
             <span>CHEFE (Guardião)</span>
             <span className="text-xs">512 / 600</span>
           </div>
-          <div className="h-5 w-full bg-[#171c26] border border-slate-600 rounded-md overflow-hidden flex items-center relative">
+          <div className="h-5 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Heart size={14} className="text-red-500 fill-red-500 absolute left-1 z-10" />
             <div className="h-full bg-red-600 w-[85%] ml-auto" />
           </div>
-          <div className="h-4 w-full bg-[#171c26] border border-slate-600 rounded-md overflow-hidden flex items-center relative">
+          <div className="h-4 w-full bg-[#171c26]/90 border border-slate-600 rounded-md overflow-hidden flex items-center relative shadow">
             <Shield size={12} className="text-sky-400 fill-sky-400 absolute left-1 z-10" />
             <div className="h-full bg-sky-500 w-[75%] ml-auto" />
           </div>
         </div>
       </header>
 
-      {/* 2. PERSONAGENS (LIVRES NA TELA, SEM QUADRADOS) */}
-      <section className="max-w-6xl w-full mx-auto flex justify-between items-end my-2 px-6 h-48 md:h-56 pointer-events-none">
+      {/* 2. PERSONAGENS (LIVRES NO CENÁRIO) */}
+      <section className="max-w-6xl w-full mx-auto flex justify-between items-end my-1 px-4 h-52 md:h-64 pointer-events-none relative z-10">
         <div className="flex flex-col items-center">
           <img
-            src="https://placehold.co/160x220/transparent/white.png?text=Guerreiro+PNG"
+            src="/jogador.png"
             alt="Jogador"
-            className="h-44 md:h-52 object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
+            className="h-48 md:h-60 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)]"
           />
         </div>
 
-        <div className="flex flex-col items-center pb-8 font-mono font-black text-center drop-shadow-md">
+        <div className="flex flex-col items-center pb-8 font-mono font-black text-center drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
           <span className="text-xl text-red-500">-21 Dano</span>
           <span className="text-sm text-sky-300">-50 Escudo</span>
         </div>
 
         <div className="flex flex-col items-center">
           <img
-            src="https://placehold.co/180x220/transparent/red.png?text=Guardião+PNG"
+            src="/chefe.png"
             alt="Chefe"
-            className="h-44 md:h-52 object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]"
+            className="h-48 md:h-60 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.7)]"
           />
         </div>
       </section>
 
-      {/* 3. ESPAÇOS DE ITENS (PUZZLE 5x5 LIMPO, SEM TEXTOS E SEM PONTOS) */}
-      <section className="max-w-5xl w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 justify-items-center items-center">
-        {/* ================= INVENTÁRIO DO JOGADOR (BASE LIMPA) ================= */}
-        <div className="w-full max-w-[380px] aspect-square bg-[#101724] border-4 border-[#1f2b3e] rounded-2xl p-2.5 shadow-2xl grid grid-cols-5 grid-rows-5 gap-1.5 relative">
-          {playerItems.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                gridColumn: `${item.x + 1} / span ${item.width}`,
-                gridRow: `${item.y + 1} / span ${item.height}`,
-              }}
-              className={`rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-1.5 flex flex-col justify-between items-center shadow-lg relative overflow-hidden`}
-            >
-              <span className="text-[10px] font-black text-cyan-200 text-center drop-shadow">
-                {item.name}
-              </span>
-              <img
-                src={item.imageUrl}
-                alt={item.name}
-                className="w-full flex-1 object-contain max-h-12 my-0.5"
+      {/* 3. PAINÉIS DE INVENTÁRIO (GRADE E ITENS 100% ALINHADOS) */}
+      <section className="max-w-5xl w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 justify-items-center items-center relative z-10">
+        
+        {/* ================= INVENTÁRIO DO JOGADOR ================= */}
+        <div className="w-full max-w-[380px] aspect-square bg-[#0e1624]/90 backdrop-blur-sm border-4 border-[#1e2a3c] rounded-2xl p-2.5 shadow-2xl relative">
+          {/* Camada 1: Grade de Fundo (25 slots vazios suaves) */}
+          <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
+            {Array.from({ length: 25 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-cyan-400/15 bg-cyan-950/20"
               />
-              <span className="text-[9px] font-bold text-slate-300">
-                {item.width}x{item.height}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          {/* Camada 2: Itens Sobrepostos com Alinhamento Perfeito */}
+          <div className="relative z-10 w-full h-full grid grid-cols-5 grid-rows-5 gap-1.5">
+            {playerItems.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  gridColumn: `${item.x + 1} / span ${item.width}`,
+                  gridRow: `${item.y + 1} / span ${item.height}`,
+                }}
+                className={`rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-1.5 flex flex-col justify-between items-center shadow-lg relative overflow-hidden`}
+              >
+                <span className="text-[10px] font-black text-cyan-200 text-center drop-shadow">
+                  {item.name}
+                </span>
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  className="w-full flex-1 object-contain max-h-16 my-0.5"
+                />
+                <span className="text-[9px] font-bold text-slate-300">
+                  {item.width}x{item.height}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* ================= EQUIPAMENTO DO CHEFE (TOTALMENTE PREENCHIDO) ================= */}
-        <div className="w-full max-w-[380px] aspect-square bg-[#170e1c] border-4 border-[#2d182e] rounded-2xl p-2.5 shadow-2xl grid grid-cols-5 grid-rows-5 gap-1.5 relative">
-          {bossItems.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                gridColumn: `${item.x + 1} / span ${item.width}`,
-                gridRow: `${item.y + 1} / span ${item.height}`,
-              }}
-              className={`rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-1.5 flex flex-col justify-between items-center shadow-lg relative overflow-hidden`}
-            >
-              <span className="text-[10px] font-black text-purple-200 text-center drop-shadow">
-                {item.name}
-              </span>
-              <img
-                src={item.imageUrl}
-                alt={item.name}
-                className="w-full flex-1 object-contain max-h-12 my-0.5"
+        {/* ================= INVENTÁRIO DO CHEFE ================= */}
+        <div className="w-full max-w-[380px] aspect-square bg-[#160c1a]/90 backdrop-blur-sm border-4 border-[#2c1533] rounded-2xl p-2.5 shadow-2xl relative">
+          {/* Camada 1: Grade de Fundo (25 slots vazios suaves) */}
+          <div className="absolute inset-2.5 grid grid-cols-5 grid-rows-5 gap-1.5 pointer-events-none">
+            {Array.from({ length: 25 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-purple-400/15 bg-purple-950/20"
               />
-              <span className="text-[9px] font-bold text-slate-300">
-                {item.width}x{item.height}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          {/* Camada 2: Itens Sobrepostos com Alinhamento Perfeito */}
+          <div className="relative z-10 w-full h-full grid grid-cols-5 grid-rows-5 gap-1.5">
+            {bossItems.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  gridColumn: `${item.x + 1} / span ${item.width}`,
+                  gridRow: `${item.y + 1} / span ${item.height}`,
+                }}
+                className={`rounded-xl border-2 ${item.borderColor} ${item.bgColor} p-1.5 flex flex-col justify-between items-center shadow-lg relative overflow-hidden`}
+              >
+                <span className="text-[10px] font-black text-purple-200 text-center drop-shadow">
+                  {item.name}
+                </span>
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  className="w-full flex-1 object-contain max-h-16 my-0.5"
+                />
+                <span className="text-[9px] font-bold text-slate-300">
+                  {item.width}x{item.height}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
+
       </section>
 
       {/* 4. BOTÕES DE AÇÃO */}
-      <footer className="max-w-md w-full mx-auto flex items-center gap-4 mt-3 pb-2">
-        <button className="flex-1 py-3 rounded-xl bg-[#243142] hover:bg-[#2c3d52] border-2 border-[#3d5069] text-white font-bold text-sm tracking-wider uppercase shadow">
+      <footer className="max-w-md w-full mx-auto flex items-center gap-4 mt-3 pb-2 relative z-10">
+        <button className="flex-1 py-3 rounded-xl bg-[#243142]/90 hover:bg-[#2c3d52] border-2 border-[#3d5069] text-white font-bold text-sm tracking-wider uppercase shadow backdrop-blur-sm">
           PREPARAÇÃO
         </button>
         <button className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 border-2 border-emerald-300 text-slate-950 font-black text-sm tracking-wider uppercase shadow-lg">
